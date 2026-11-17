@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "kind": "receipt",
+  "project": "gtm",
+  "task": "maintainer-pitch",
+  "base": "ff4b6b58838a57cc7c8d5f2c06fee3e52a246225",
+  "work": "9cf611986027ae9e258ccafb8e8759410ff9c0ef",
+  "tree": "4aa0c04fe43f4069519ba0b6d39ca5e311b172ba",
+  "diffSha256": "ea34c7dcd8d5ed32de816c0158350393e0eedf5c6abca20fd728311cdf6ed0f0",
+  "filesChanged": 1,
+  "linesChanged": 33,
+  "agent": {
+    "runner": "connector:hermes",
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "selfReported": true
+  },
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "costUsd": 0,
+    "turns": 0,
+    "durationMs": 32595
+  },
+  "attempts": 1,
+  "sandbox": "seatbelt",
+  "verify": [
+    {
+      "name": "harness-tests",
+      "run": "node --test gtm/test/*.test.mjs",
+      "exit": 0,
+      "ms": 178,
+      "outputSha256": "3154053a4263d26eecd250edfd2b9411c67371cd1c4fd49a4d2c42ac5a33f522"
+    },
+    {
+      "name": "asset-checks",
+      "run": "node gtm/verify.mjs",
+      "exit": 0,
+      "ms": 71,
+      "outputSha256": "f9edc52262bb665ce2b407431cbf29f58cd09c0bfd4d02990ab5200318b1e0d1"
+    }
+  ],
+  "ts": "2026-11-17T22:46:00.458Z",
+  "signer": {
+    "id": "40553ad5eb16a363",
+    "handle": "serg1210",
+    "publicKey": "MCowBQYDK2VwAyEAwQ4qMVtkDJ1fGlPS9Yjqe2rUrpPnGUEVHRY2DPRQgQM="
+  },
+  "sig": "/HvKS0HylODmmIBAUj3SHFOIoWeOzcbjZuceoXAwXQ7tv7R8BtkFAqmMA3qFAQs6fBMpSSnCQtC2h4XBo6puCw=="
+}
