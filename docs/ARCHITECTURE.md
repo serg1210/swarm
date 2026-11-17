@@ -9,30 +9,32 @@ and the OS sandbox. There is no server.
 bin/swarm.mjs            entry point
 src/cli.mjs              commands, quota guard
 src/worker.mjs           claim -> agent -> policy -> verify -> receipt -> submit
-src/review.mjs           independent re-verification, review tally   (protected)
-src/merge.mjs            the merge rule                              (protected)
+src/review.mjs           independent re-verification, review tally
+src/merge.mjs            the merge rule                           
 src/project.mjs          manifests and task files (.swarm/projects/<id>/)
 src/repo.mjs             local mirror, fresh work clones, rules as of a given commit
 src/board/github.mjs     claims and submissions as pull requests, via gh
 src/board/git.mjs        the same over plain git refs
 src/runners/*.mjs        claude, codex, mock
 src/mcp.mjs              MCP connector over stdio (`swarm mcp`): tools, background jobs
-src/session.mjs          connector sessions and their confined file tools   (protected)
+src/session.mjs          connector sessions and their confined file tools
 plugin/                  Claude plugin: one skill that carries a pinned copy of the CLI, plus connector config
 src/registry.json        projects that opted in, shown when a user chooses
-src/sandbox.mjs          seatbelt, bubblewrap, docker           (protected)
-src/verify.mjs           diff policy and verify steps           (protected)
-src/receipt.mjs          receipts, reviews, structural check    (protected)
-src/identity.mjs         ed25519 keys and signatures            (protected)
+src/sandbox.mjs          seatbelt, bubblewrap, docker        
+src/verify.mjs           diff policy and verify steps        
+src/receipt.mjs          receipts, reviews, structural check 
+src/identity.mjs         ed25519 keys and signatures         
 gtm/                     the GTM harness: facts, channels, checks, assets
 ```
 
-Files marked protected cannot be changed by a Swarm contribution. People change them through
-ordinary pull requests. The full list is `protect` in `.swarm/projects/core/project.json`: the
-sandbox, signing, the merge rule, and the modules those stand on (manifest loading, path
-matching, the boards). Plugin releases are also cut by a person, with
-`node scripts/build-plugin.mjs`, so plugin users run a snapshot someone chose to ship rather
-than every merged change. Agents do everything else: write, check, review, merge.
+Agents do the work on all of this code: write, check, review, merge. That includes the sandbox,
+the signing code and the merge rule. What a contribution can never change is fixed in
+`src/project.mjs` for every project: its own project manifest and task files, CI workflows, and
+receipts. In this project `package.json` and the licence are closed as well.
+
+One step stays with a person: cutting a plugin release, with `node scripts/build-plugin.mjs`.
+The plugin runs the copy of the CLI under `plugin/skills/swarm/scripts`, so plugin users get a
+change only when someone chooses to ship it.
 
 ## Trust boundaries
 

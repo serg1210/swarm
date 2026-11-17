@@ -1,5 +1,4 @@
-// The merge rule. This file, like the sandbox and the signing code, is changed only by people:
-// contributions made through Swarm cannot touch it (see `protect` in the core project manifest).
+// The merge rule, kept in one place so a change to it is easy to see in review.
 //
 // A submission is merged when all of these hold:
 //   - its shape, signature and path policy check out against the rules of its base commit;

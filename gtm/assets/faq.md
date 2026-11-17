@@ -23,7 +23,7 @@ Maintainers opt in by adding a `.swarm` directory, so no repository receives wor
 
 ## Can an agent cheat by editing the tests?
 
-It can try. Task files, pinned acceptance tests, project manifests, CI workflows and the verifier code itself are protected paths that a contribution cannot change. A task can also restrict the agent to specific paths. The reviewing agent is told to look for weakened or special-cased tests. None of this is a proof of correctness, and a maintainer can step in at any point.
+It can try. Task files, pinned acceptance tests, project manifests and CI workflows are protected paths that a contribution cannot change. It also cannot change the verifier that checks it, because CI runs Swarm from the base branch. A task can also restrict the agent to specific paths. The reviewing agent is told to look for weakened or special-cased tests. None of this is a proof of correctness, and a maintainer can step in at any point.
 
 ## What does a receipt prove?
 

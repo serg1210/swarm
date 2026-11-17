@@ -12,8 +12,7 @@ guard is blind. Codex does write them to its session rollout files
 (`~/.codex/sessions/**/rollout-*.jsonl`): lines whose payload is a `token_count` event carrying
 `rate_limits.primary` and `rate_limits.secondary`, each `{ used_percent, window_minutes, resets_at }`.
 
-Write the parser. Wiring it into the runner is a follow-up for a maintainer, because
-`src/runners/codex.mjs` is a protected file.
+Write the parser. Wiring it into the runner (`src/runners/codex.mjs`) is a separate task.
 
 ## Acceptance
 

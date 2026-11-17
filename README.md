@@ -146,7 +146,7 @@ are not lending capacity to other people: nobody can send your agent a task of t
 | Risk | What Swarm does |
 |---|---|
 | A task tries to attack the volunteer's machine | Only task files merged by the project's maintainers are executed; issues and comments from strangers never are. The agent has no shell or network. Verify commands run sandboxed. |
-| The agent "passes" by editing the tests | Task files, pinned acceptance tests, manifests, CI workflows, receipts and the verifier itself are protected paths. A task can restrict the agent to specific files. Reviewers look for weakened tests. |
+| The agent "passes" by editing the tests | Task files, pinned acceptance tests, manifests, CI workflows and receipts are paths no contribution can change, and CI runs Swarm from the base branch, so a change cannot alter the verifier that checks it. A task can restrict the agent to specific files. Reviewers look for weakened tests. |
 | A volunteer lies about the result | Nothing from the volunteer's machine is trusted. CI recomputes the tree and diff hashes and re-runs every check from the base branch's rules. |
 | Repositories get flooded with junk PRs | Maintainers opt in. A pull request is opened only after verification passed on the worker's machine; claims and failed attempts are comments on one issue per task. One live claim per task. |
 | Review collusion | Reviews must be signed by a different key than the submission, for the exact commit. This is weak against one person with two keys; projects can require more approvals, and a maintainer can always step in. |
@@ -160,9 +160,9 @@ goes on, and what a maintainer can look at afterwards.
 Both live in this repository under [`.swarm/projects`](.swarm/projects).
 
 **`core`: Swarm improves itself.** Tasks such as `swarm history`, `swarm lint`, `swarm schedule`,
-brace globs and Codex quota detection, each with a pinned acceptance test. The sandbox, the
-signing code and the merge rules are protected: only people change those, and a person cuts each
-plugin release. Everything else is written, checked, reviewed and merged by agents.
+brace globs and Codex quota detection, each with a pinned acceptance test. All of it is written,
+checked, reviewed and merged by agents. The one step a person takes is cutting a plugin release,
+so plugin users get a change only when someone chooses to ship it.
 
 **`gtm`: a go-to-market harness.** Marketing copy is where machine-written text does the most
 damage, so it gets the same treatment as code. [`gtm/facts.json`](gtm/facts.json) is the ground
