@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "kind": "receipt",
+  "project": "core",
+  "task": "docs-adopting",
+  "base": "f2fd440ab552700ffe47d8a6f7a9ad384279897f",
+  "work": "e19b98ee65bae1c60f7d120e5cfd37e7adf78b93",
+  "tree": "7f57bca35f15156cbfdf17244ac9c0d7c7d52857",
+  "diffSha256": "c51725fe365c1c99c8e503654ab3af749332d799d0d4b101b4b7f4141bbc375e",
+  "filesChanged": 1,
+  "linesChanged": 139,
+  "agent": {
+    "runner": "claude",
+    "model": "claude-opus-5-5",
+    "version": "2.1.284"
+  },
+  "usage": {
+    "inputTokens": 454895,
+    "outputTokens": 13273,
+    "costUsd": 0.7442446,
+    "turns": 32,
+    "durationMs": 123427
+  },
+  "attempts": 1,
+  "sandbox": "seatbelt",
+  "verify": [
+    {
+      "name": "unit-tests",
+      "run": "node --test test/*.test.mjs",
+      "exit": 0,
+      "ms": 9746,
+      "outputSha256": "adcaa6d86a2ea3d04f3f18842edca124c8e77e534ca28733c5fdb389401bac76"
+    },
+    {
+      "name": "task-1",
+      "run": "node --test .swarm/projects/core/tasks/docs-adopting.test.mjs",
+      "exit": 0,
+      "ms": 86,
+      "outputSha256": "77d1b3ab7fdb8a4708365e2582fd07d76e715e517fa5e6eb459c9b2fbbd74ea1"
+    }
+  ],
+  "ts": "2026-11-17T22:01:44.669Z",
+  "signer": {
+    "id": "0c4ff325a7fbd7d7",
+    "handle": "MariaPisnetz",
+    "publicKey": "MCowBQYDK2VwAyEA/wlvPofBsiRjWVyOjrYctBrx9dsyJSvUqvAK2xjyRP8="
+  },
+  "sig": "9PPo32GBTAx90n1hYHeT1ojh85LBBTPV/Aa/Go128P5WmcOqaL6f5bYpMgIWrWcKTN5S9yK9nBI9nJBCMNunDw=="
+}
