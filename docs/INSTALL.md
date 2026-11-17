@@ -8,7 +8,8 @@ that project's maintainers wrote. This page covers each place it can run.
 | Claude Code on your computer | The official CLI, started by Swarm with no shell and no network | Yes, keeps a 20% reserve | Yes |
 | Claude Code cloud session or cloud scheduled task | The session's own agent, in its VM | No; scheduled before the weekly reset | On a local stand-in only |
 | Cowork on your computer | The official CLI if installed, else Cowork's agent through the connector | Only with the CLI installed | No |
-| Codex or Hermes | That agent, through the connector | No | No |
+| Codex | The Codex CLI, started by Swarm in Codex's own sandbox | No | Yes |
+| Hermes | Hermes itself, through the connector | No | Yes |
 
 Wherever it runs, Swarm does the claim, the path-policy check, the project's verify steps, the
 signed receipt and the pull request, under your own GitHub identity.
@@ -17,6 +18,12 @@ signed receipt and the pull request, under your own GitHub identity.
 
 ```
 /plugin install swarm --marketplace serg1210/swarm
+```
+
+Or from a terminal:
+
+```bash
+claude plugin install swarm --marketplace serg1210/swarm
 ```
 
 Then say "set up Swarm". Claude shows the projects that opted in, saves your choice, and offers
@@ -67,11 +74,35 @@ computer off, use a Claude Code cloud scheduled task as above. Not yet tested by
 
 ## Codex
 
-Not yet tested by the maintainers (written from the Codex documentation).
+Tested by the maintainers on macOS with Codex CLI 0.169, logged in with a ChatGPT plan: Swarm
+started Codex on a task, checked the result and opened the pull request.
 
 ```bash
 npm install -g github:serg1210/swarm
 ```
+
+```bash
+swarm run --runner codex
+```
+
+Three differences from the Claude runner:
+
+- Codex reads and edits through a shell inside its own sandbox (no network, writes confined to
+  the task's clone). The Claude runner gets file tools and no shell at all.
+- Swarm cannot read Codex quota windows yet, so it keeps no reserve. Time the run yourself.
+- Codex reports tokens, not cost, so receipts show $0.00.
+
+Daily run, from your own crontab (`crontab -e`):
+
+```
+0 18 * * * swarm run --runner codex --max-tasks 1
+```
+
+OpenAI's documentation recommends API keys rather than a ChatGPT login for automation, so read
+your plan's terms before putting a subscription on a timer.
+
+Codex can also be the host, with Swarm as a connector. This route is written from the Codex
+documentation and not yet tested by the maintainers:
 
 ```bash
 codex mcp add swarm -- swarm mcp
@@ -87,38 +118,24 @@ args = ["mcp"]
 tool_timeout_sec = 900
 ```
 
-Add the skill (the instructions only; with `swarm` installed globally, read `SWARM` in it as the `swarm` command):
-
-```bash
-mkdir -p ~/.codex/skills/swarm && curl -fsSL https://raw.githubusercontent.com/serg1210/swarm/main/plugin/skills/swarm/SKILL.md -o ~/.codex/skills/swarm/SKILL.md
-```
-
-Daily run, from your own crontab (`crontab -e`):
-
-```
-0 18 * * * codex exec "Run the swarm skill. Do at most one task."
-```
-
-Two things to know. OpenAI's documentation recommends API keys rather than a ChatGPT login for
-automation, so read your plan's terms before putting a subscription on a timer. And if all you want
-is Codex doing Swarm tasks, `swarm run --runner codex` does that without the connector.
-
 ## Hermes
 
-Not yet tested by the maintainers (written from the Hermes Agent documentation).
+Tested by the maintainers on macOS with Hermes Agent 0.23: Hermes did a task itself through the
+connector and Swarm opened the pull request.
 
 ```bash
 npm install -g github:serg1210/swarm
 ```
 
-Add the connector to `~/.hermes/config.yaml`:
+Add the connector (answer `Y` to enable its tools), then raise its timeout, because verification
+can take minutes:
 
-```yaml
-mcp_servers:
-  swarm:
-    command: "swarm"
-    args: ["mcp"]
-    timeout: 900
+```bash
+hermes mcp add swarm --command swarm --args mcp
+```
+
+```bash
+hermes config set mcp_servers.swarm.timeout 900
 ```
 
 ```bash
@@ -131,16 +148,22 @@ Add the skill:
 mkdir -p ~/.hermes/skills/swarm && curl -fsSL https://raw.githubusercontent.com/serg1210/swarm/main/plugin/skills/swarm/SKILL.md -o ~/.hermes/skills/swarm/SKILL.md
 ```
 
+One task now, with Hermes limited to the Swarm tools:
+
+```bash
+hermes -t swarm -z "Use the Swarm connector in connector mode: swarm_status, swarm_begin, do the task with the swarm file tools, swarm_finish. Do at most one task."
+```
+
 Daily run:
 
 ```bash
-hermes cron create "every day at 6pm" "Run the swarm skill. Do at most one task." --skill swarm --name swarm-leftover
+hermes cron create "0 18 * * *" "Use the Swarm connector in connector mode. Do at most one task." --skill swarm --name swarm-leftover
 ```
 
-Hermes runs scheduled agent jobs inside its gateway, so the gateway has to be running
-(`hermes gateway install`). Hermes names the tools `mcp_swarm_swarm_status` and so on. With no
-Claude Code or Codex CLI on the machine, the skill uses connector mode: Hermes does the task
-itself.
+Hermes runs scheduled jobs inside its gateway, so the gateway has to be running (`hermes cron
+status` tells you). In connector mode Hermes writes the change itself, on whatever model you have
+configured, so that is the quota it spends. If Claude Code or Codex is also installed, the skill
+prefers to start that instead; say "connector mode" when you want Hermes to do the work.
 
 ## Any other MCP host
 

@@ -26,8 +26,8 @@ Use this when writing a launch post. Write the post yourself: Hacker News asks t
 ## Known limitations
 
 - Coordination is GitHub pull requests. It is not a peer-to-peer network and there is no server.
-- The macOS sandbox is tested; Linux and Docker modes are not yet tested by the maintainers.
-- The Codex runner is experimental.
+- The macOS, Linux (bubblewrap) and Docker sandboxes are tested. On Ubuntu 24.04 and newer, bubblewrap needs a system setting changed first; the alternative there is Docker.
+- With the Codex runner, Swarm cannot read quota windows yet, so it keeps no reserve.
 - An agent without a shell cannot run tests itself. It gets verifier output and one more attempt.
 - Passing tests and one review do not prove a change is correct. A maintainer can step in at any point.
 - Providers can change plan terms. Swarm is not affiliated with Anthropic or OpenAI.

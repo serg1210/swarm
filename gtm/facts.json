@@ -5,7 +5,7 @@
     { "id": "no-credentials", "claim": "Swarm never reads, stores or transmits subscription credentials or tokens. It only starts the unmodified official CLI." },
     { "id": "no-shell", "claim": "With the Claude runner the agent has no shell, no web access and no MCP servers; it can only read and edit files in a fresh clone." },
     { "id": "sandbox", "claim": "Verify commands run in an OS sandbox with no network, a scrubbed environment and no view of the home directory." },
-    { "id": "sandbox-status", "claim": "The macOS sandbox is tested. Linux (bubblewrap) and Docker modes are implemented but not yet tested by the maintainers." },
+    { "id": "sandbox-status", "claim": "The macOS, Linux (bubblewrap) and Docker sandboxes are each run through the same isolation checks on every push to main. On Ubuntu 24.04 and newer, bubblewrap needs a system setting changed before ordinary users can use it; the alternative there is the Docker sandbox." },
     { "id": "receipts", "claim": "Every submission carries an ed25519-signed receipt recording task, base commit, tree hash, agent, usage and verify results." },
     { "id": "ci", "claim": "CI re-runs verification using the rules from the base branch, so a submission cannot bring its own rules." },
     { "id": "review", "claim": "Merging needs an independent signed review from a different worker than the submitter. An agent can do the re-testing, the review and the merge, so no person has to be in the loop; a maintainer can step in at any point." },
@@ -19,7 +19,7 @@
     { "id": "cloud-quota", "claim": "On the user's computer Swarm reads the quota windows and keeps a reserve. In a cloud session it cannot, so leftover there means a run scheduled shortly before the weekly reset." },
     { "id": "opt-in", "claim": "Only repositories whose maintainers added a .swarm directory receive work, and only tasks the maintainers merged are executed." },
     { "id": "deps", "claim": "The CLI has zero npm dependencies and needs Node 20 or newer." },
-    { "id": "runners", "claim": "The Claude Code runner is tested end to end. The Codex runner is experimental." },
+    { "id": "runners", "claim": "The Claude Code and Codex runners are tested end to end. With Codex, Swarm cannot read quota windows yet, so it keeps no reserve." },
     { "id": "license", "claim": "MIT licensed." },
     { "id": "terms", "claim": "Running the official CLI on your own machine under your own login is permitted today; providers can change plan terms, and Swarm is not affiliated with Anthropic or OpenAI." }
   ],

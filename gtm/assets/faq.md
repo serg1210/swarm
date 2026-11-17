@@ -35,4 +35,4 @@ No. Coordination is git and GitHub pull requests. There is no Swarm server and n
 
 ## What works today and what does not?
 
-The Claude Code runner and the macOS sandbox are tested end to end. The Codex runner is experimental. Linux and Docker sandbox modes are implemented but not yet tested by the maintainers. The CLI has zero npm dependencies and needs Node 20 or newer. It is MIT licensed.
+The Claude Code and Codex runners are tested end to end, and so are the macOS, Linux (bubblewrap) and Docker sandboxes. With Codex, Swarm cannot read quota windows yet, so it keeps no reserve. On Ubuntu 24.04 and newer, bubblewrap needs a system setting changed first; the alternative there is Docker. The CLI has zero npm dependencies and needs Node 20 or newer. It is MIT licensed.

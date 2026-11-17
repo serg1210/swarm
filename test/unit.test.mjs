@@ -5,7 +5,7 @@ import { globToRegExp, matchesAny, parseFrontmatter, canonicalJson } from '../sr
 import { signDoc, verifyDoc, fingerprint } from '../src/identity.mjs';
 import { checkPolicy } from '../src/verify.mjs';
 import { parseStream } from '../src/runners/claude.mjs';
-import { parseStream as parseCodex } from '../src/runners/codex.mjs';
+import { parseStream as parseCodex, buildArgs as codexArgs, hasShell as codexHasShell } from '../src/runners/codex.mjs';
 import { quotaDecision, parseArgs } from '../src/cli.mjs';
 import { parseVerdict, tallyReviews } from '../src/review.mjs';
 import { leaderboard } from '../src/ledger.mjs';
@@ -109,6 +109,10 @@ test('codex stream parsing', () => {
   assert.equal(r.summary, 'All done');
   assert.equal(r.usage.inputTokens, 10);
   assert.equal(parseCodex(JSON.stringify({ type: 'turn.failed', error: { message: 'rate limited' } })).error, 'rate limited');
+  assert.equal(codexHasShell, true);
+  const args = codexArgs({ cwd: '/w' });
+  assert.ok(args.includes('workspace-write') && args.includes('web_search="disabled"') && args.includes('--ignore-user-config'));
+  assert.ok(codexArgs({ cwd: '/w', readOnly: true }).includes('read-only'));
 });
 
 test('quota guard keeps a reserve and honours --only-if-expiring', () => {
@@ -214,6 +218,12 @@ test('prompt carries failure hints; unpublished tasks are not open', () => {
   const task = { id: 'x', ref: 'core/x', title: 'T', body: 'B', paths: ['src/**'], verify: [], status: 'ready' };
   assert.doesNotMatch(buildPrompt({ project, task }), /earlier workers/);
   assert.match(buildPrompt({ project, task, hints: { failures: { 'unit-tests': 2 } } }), /did not get past: unit-tests \(2x\)/);
+  // An agent with file tools is told it cannot run commands; one that works through a shell
+  // (Codex) is told what the shell is for. Telling Codex "no commands" left it unable to read.
+  assert.match(buildPrompt({ project, task }), /You cannot run commands/);
+  const forShell = buildPrompt({ project, task, agentShell: true });
+  assert.doesNotMatch(forShell, /You cannot run commands/);
+  assert.match(forShell, /Use your shell only to read and edit files/);
   project.tasks = [task];
   assert.equal(openTasks([project], '/nonexistent', new Map(), { unpublished: new Set(['core/x']) })[0].state, 'unpublished');
   assert.equal(openTasks([project], '/nonexistent', new Map())[0].state, 'open');

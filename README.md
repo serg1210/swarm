@@ -39,10 +39,10 @@ review, and the [receipt](.swarm/receipts/core/glob-braces/40553ad5eb16a363.json
 reviewer was a second key on the maintainer's own account, which exercises the mechanics but is
 not an independent review.
 
-> **Status: v0.1.** The Claude Code runner, the macOS sandbox and the GitHub flow for someone with
-> push access are tested end to end. Not yet exercised: submitting from a fork (what every outside
-> volunteer does), the Codex runner, and the Linux (bubblewrap) and Docker sandbox modes. See
-> [Known limits](#known-limits).
+> **Status: v0.1.** Tested end to end: the Claude Code and Codex runners, Hermes through the
+> connector, the macOS, Linux (bubblewrap) and Docker sandboxes, installing from the plugin
+> marketplace, and the GitHub flow both with push access and from a fork. Not yet tested: Cowork,
+> and Codex as a connector host. See [Known limits](#known-limits).
 
 ## Without the plugin
 
@@ -77,7 +77,9 @@ to submit. `swarm review` verifies someone else's submission instead of writing 
 | Claude Code on your computer | The plugin's connector starts the official CLI boxed in (no shell, no network), reads your quota windows first | Yes |
 | Claude Code cloud sessions and cloud scheduled tasks | The skill runs the CLI it carries inside the session's VM; this agent writes the change; GitHub goes through the session's connection | On a local stand-in only; not yet in a real cloud session |
 | Cowork on your computer | Same plugin; the connector submits, because a Cowork task's own shell cannot push to GitHub | No |
-| Codex, Hermes, any MCP host | `swarm mcp` as a connector | No |
+| Codex | `swarm run --runner codex` starts the Codex CLI in its own sandbox | Yes |
+| Hermes | `swarm mcp` as a connector; Hermes writes the change itself | Yes |
+| Codex as a host, any other MCP host | `swarm mcp` as a connector | No |
 | No agent host | `npx github:serg1210/swarm run` from your own timer | Yes |
 
 [docs/INSTALL.md](docs/INSTALL.md) has the steps for each.
@@ -230,9 +232,14 @@ check on your default branch and allow merge commits. Run `swarm sync` after mer
 - **Not peer-to-peer.** Coordination is git and GitHub pull requests. There is no Swarm server
   either. A plain-git board (claims as compare-and-swap refs) exists for other forges and is what
   the test suite uses.
-- **Linux and Docker sandboxes are untested.** On Linux without bubblewrap, Swarm refuses to run
-  verify commands unless you pass `--unsafe-no-sandbox`.
-- **The Codex runner is experimental**, and Swarm cannot yet read Codex quota windows.
+- **Ubuntu 24.04 and newer block bubblewrap for ordinary users.** `swarm doctor` says so and
+  names the system setting that allows it. The alternative is `--sandbox docker`, for projects
+  that name a sandbox image (both starter projects do). With neither, Swarm refuses to run verify
+  commands unless you pass `--unsafe-no-sandbox`. All three sandboxes (macOS, bubblewrap, Docker)
+  are run through the same isolation checks on every push to main.
+- **Swarm cannot yet read Codex quota windows**, so with the Codex runner there is no reserve.
+  Codex also works through a shell inside its own sandbox, where the Claude runner gets file
+  tools only.
 - **The agent cannot run code.** That is deliberate, and it makes hard tasks harder. Tasks need to
   be written so they can be finished by reading.
 - **When your own agent does the task, Swarm trusts it more.** Through the connector its file
