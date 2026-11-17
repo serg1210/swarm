@@ -44,6 +44,7 @@ test.before(() => {
   );
   write(path.join(seed, '.swarm/projects/demo/tasks/add-greeting.md'), '---\ntitle: Add a greeting module\nsize: S\n---\nCreate src/greet.mjs exporting greet(name).\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-farewell.md'), '---\ntitle: Add a farewell module\nsize: S\n---\nCreate src/bye.mjs.\n');
+  write(path.join(seed, '.swarm/projects/demo/tasks/add-thanks.md'), '---\ntitle: Add a thanks module\nsize: S\n---\nCreate src/thanks.mjs.\n');
   write(path.join(seed, 'check.mjs'), "import fs from 'node:fs';\nfor (const f of fs.readdirSync('src')) { const m = await import('./src/' + f); if (typeof Object.values(m)[0] !== 'function') process.exit(1); }\n");
   write(path.join(seed, 'src/index.mjs'), 'export const main = () => 1;\n');
   sh('git', ['init', '-q', '-b', 'main'], seed);
@@ -146,4 +147,23 @@ test('a tampered submission is rejected by the structural check', () => {
   sh('git', ['push', '-q', '--force', 'origin', farewell], work);
   const rv = swarm('carol', ['review', '--repo', remote, '--runner', 'mock', '--task', 'demo/add-farewell', ...SANDBOX], { SWARM_MOCK_CMD: 'echo "VERDICT: APPROVE"' });
   assert.match(rv.out, /Not reviewable: .*bad signature/s, rv.out);
+});
+
+test('maintain: one agent re-tests, reviews and merges what another agent submitted', () => {
+  const THANKS = "echo 'export const thanks = () => 1;' > src/thanks.mjs";
+  assert.match(run('alice', 'demo/add-thanks', THANKS).out, /Submitted demo\/add-thanks/);
+  const maintain = (home) => swarm(home, ['maintain', '--repo', remote, '--runner', 'mock', ...SANDBOX], { SWARM_MOCK_CMD: 'printf "Does what the task asks.\\nVERDICT: APPROVE\\n"' });
+
+  // The submitter's own maintain pass cannot approve or merge its own work.
+  const own = maintain('alice');
+  assert.match(own.out, /demo\/add-thanks .*Needs 1 independent approval.*your own submission/s, own.out);
+  assert.doesNotMatch(own.out, /Merged demo\/add-thanks/);
+
+  // A different worker's pass reviews it and merges it, and steps over the forged submission.
+  const other = maintain('bob');
+  assert.match(other.out, /Review posted: approve/, other.out);
+  assert.match(other.out, /Merged demo\/add-thanks/);
+  assert.match(other.out, /demo\/add-farewell .*not valid/s);
+  assert.match(other.out, /1 reviewed, 1 merged/);
+  assert.match(sh('git', ['ls-tree', '-r', '--name-only', 'main'], remote), /src\/thanks\.mjs/);
 });

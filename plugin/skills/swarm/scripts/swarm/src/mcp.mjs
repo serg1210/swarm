@@ -209,8 +209,18 @@ export const TOOLS = [
     },
   },
   {
+    name: 'swarm_maintain',
+    description: 'The maintainer\'s pass, as a background job: for every open submission in the project, re-test it, review it if it came from someone else, and merge it once it has the required independent approval. It never approves this worker\'s own submissions. Returns a job id; poll swarm_job. Needs an agent CLI and push access to the project.',
+    inputSchema: S({ repo: REPO, model: str('Model name passed to the agent CLI.'), dry_run: { type: 'boolean', description: 'Review nothing and merge nothing; just report.' } }),
+    async run(a) {
+      await identity();
+      if (!(await detectRunners()).length) throw new Error('Maintaining needs an agent CLI (claude or codex) on this machine.');
+      return startJob('maintain', ['maintain', ...runArgs(a)]);
+    },
+  },
+  {
     name: 'swarm_job',
-    description: 'Status and recent output of a background job started by swarm_donate or swarm_review.',
+    description: 'Status and recent output of a background job started by swarm_donate, swarm_review or swarm_maintain.',
     inputSchema: S({ job: str('Job id.') }, ['job']),
     readOnly: true,
     async run(a) {

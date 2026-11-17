@@ -1,6 +1,6 @@
 ---
 name: swarm
-description: Spend leftover Claude quota on an open-source project the user chose. Use when the user asks to set up Swarm, choose a project to donate quota to, donate leftover quota, do a Swarm task, review a Swarm submission, or when a scheduled Swarm run starts.
+description: Spend leftover Claude quota on an open-source project the user chose. Use when the user asks to set up Swarm, choose a project to donate quota to, donate leftover quota, do a Swarm task, review or merge Swarm submissions, maintain a Swarm project, or when a scheduled Swarm run starts.
 ---
 
 Swarm is three steps: the user installs this plugin, chooses a project, and their leftover quota
@@ -67,6 +67,15 @@ When the user asks to review a Swarm submission: with the connector, call `swarm
 `--task project/task` or the pull request number). Swarm reproduces the checks, has the local
 agent CLI read the change, and posts a signed review. It needs the `claude` or `codex` CLI on the
 machine, and it never reviews the user's own submission.
+
+## Maintain a project: review and merge what others submitted
+
+For the owner of a project, or anyone with push access to it. When the user asks to maintain the
+project, process submissions, or merge what came in: with the connector, call `swarm_maintain`
+and poll `swarm_job`; with a shell, run `SWARM maintain`. For every open submission it re-tests
+the change, reviews it if it came from someone else, and merges it once it has the required
+independent approval. It never approves the user's own submissions; those wait for another
+worker. Report what it reviewed, merged and left waiting.
 
 ## Report
 

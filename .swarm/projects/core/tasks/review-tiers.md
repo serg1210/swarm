@@ -1,7 +1,7 @@
 ---
 title: Make the review quorum depend on which paths a change touches
 size: M
-paths: ["src/quorum.mjs", "src/cli.mjs", "test/**", "docs/ARCHITECTURE.md"]
+paths: ["src/quorum.mjs", "test/**", "docs/ARCHITECTURE.md"]
 verify: ["node --test .swarm/projects/core/tasks/review-tiers.test.mjs"]
 ---
 ## Goal
@@ -29,8 +29,8 @@ quorum for sensitive paths.
   `src/util.mjs`. Tiers can only raise the requirement, never lower it. Missing `tiers`, an empty
   `files` array, and tiers with a missing or non-numeric `quorum` must all be handled without throwing
   (ignore malformed tiers).
-- `swarm merge` in `src/cli.mjs` uses it: the changed files are `r.diff.files` (each has a `file`
-  property). The message that reports how many approvals are needed shows the tiered number.
+- Do not wire it into the merge step. The merge rule lives in `src/merge.mjs`, which only people
+  change; a maintainer will call your function from there. Your part is the function and its tests.
 - Add a short paragraph to `docs/ARCHITECTURE.md` describing `review.tiers`.
 - Unit tests in `test/`.
 

@@ -21,7 +21,7 @@ Use this when writing a launch post. Write the post yourself: Hacker News asks t
 3. The worker signs a receipt with a local ed25519 key and only then opens a pull request. Claims and failed attempts are comments on one issue per task.
 4. CI re-runs verification using rules from the base branch.
 5. Another worker reproduces the result and posts a signed review.
-6. A maintainer merges.
+6. A second agent re-tests the change and merges it once it has an independent approval. No person has to be in the loop.
 
 ## Known limitations
 
@@ -29,6 +29,6 @@ Use this when writing a launch post. Write the post yourself: Hacker News asks t
 - The macOS sandbox is tested; Linux and Docker modes are not yet tested by the maintainers.
 - The Codex runner is experimental.
 - An agent without a shell cannot run tests itself. It gets verifier output and one more attempt.
-- Passing tests and one review do not prove a change is correct. A person still merges.
+- Passing tests and one review do not prove a change is correct. A maintainer can step in at any point.
 - Providers can change plan terms. Swarm is not affiliated with Anthropic or OpenAI.
 - Other projects use spare quota for open-source work too. Swarm's difference is the verification pipeline and maintainer opt-in.

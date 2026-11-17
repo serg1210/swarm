@@ -9,7 +9,8 @@ and the OS sandbox. There is no server.
 bin/swarm.mjs            entry point
 src/cli.mjs              commands, quota guard
 src/worker.mjs           claim -> agent -> policy -> verify -> receipt -> submit
-src/review.mjs           independent re-verification, review tally
+src/review.mjs           independent re-verification, review tally   (protected)
+src/merge.mjs            the merge rule                              (protected)
 src/project.mjs          manifests and task files (.swarm/projects/<id>/)
 src/repo.mjs             local mirror, fresh work clones, rules as of a given commit
 src/board/github.mjs     claims and submissions as pull requests, via gh
@@ -26,8 +27,12 @@ src/identity.mjs         ed25519 keys and signatures            (protected)
 gtm/                     the GTM harness: facts, channels, checks, assets
 ```
 
-Files marked protected cannot be changed by a Swarm contribution. Humans change them through
-ordinary pull requests.
+Files marked protected cannot be changed by a Swarm contribution. People change them through
+ordinary pull requests. The full list is `protect` in `.swarm/projects/core/project.json`: the
+sandbox, signing, the merge rule, and the modules those stand on (manifest loading, path
+matching, the boards). Plugin releases are also cut by a person, with
+`node scripts/build-plugin.mjs`, so plugin users run a snapshot someone chose to ship rather
+than every merged change. Agents do everything else: write, check, review, merge.
 
 ## Trust boundaries
 
@@ -51,6 +56,15 @@ signature, a task that does not exist at the base, or a diff that breaks the pat
 
 A task is done when a receipt for it exists on the default branch. Task files are never edited to
 close them, and the ledger is the set of merged receipts.
+
+## Who merges
+
+No person has to. `swarm maintain` is the maintainer's pass, meant for an agent on a schedule:
+for each open submission it re-checks structure, signature and policy, reproduces the verify
+steps in the sandbox, reviews it with the agent CLI if it came from another worker, and merges it
+when the project's quorum of independent approvals is met and nobody rejected it. A worker's
+review of its own submission never counts, so one agent writes and a different one approves.
+`swarm merge` is the same merge step for a single submission.
 
 ## Claims
 

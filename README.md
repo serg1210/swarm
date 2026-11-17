@@ -92,7 +92,7 @@ to submit. `swarm review` verifies someone else's submission instead of writing 
  │ merged to    │   │             (no shell, no web, no MCP) │   │   base branch rules │
  │ main         │   │ 3 verify    policy + sandboxed checks  │   │ 6 review  another   │
  └──────────────┘   │ 4 receipt   ed25519-signed, then PR    │   │   worker reproduces │
-                    └────────────────────────────────────────┘   │ 7 merge   a human   │
+                    └────────────────────────────────────────┘   │ 7 merge   2nd agent │
                                                                  └─────────────────────┘
 ```
 
@@ -113,7 +113,10 @@ to submit. `swarm review` verifies someone else's submission instead of writing 
 6. **Review.** Another volunteer's `swarm review` re-checks the signature and structure, reproduces
    the verify steps in their sandbox, then has their agent read the change against the task. The
    review is signed too.
-7. **Merge.** `swarm merge` refuses without the review quorum. A maintainer still decides.
+7. **Merge.** A second agent does this too. `swarm maintain` re-tests each open submission,
+   reviews the ones that came from someone else, and merges those that have the required
+   independent approval. It cannot approve its own worker's submissions. No person has to be in
+   the loop; a maintainer can step in at any point.
 
 ## You choose where your quota goes
 
@@ -146,19 +149,20 @@ are not lending capacity to other people: nobody can send your agent a task of t
 | The agent "passes" by editing the tests | Task files, pinned acceptance tests, manifests, CI workflows, receipts and the verifier itself are protected paths. A task can restrict the agent to specific files. Reviewers look for weakened tests. |
 | A volunteer lies about the result | Nothing from the volunteer's machine is trusted. CI recomputes the tree and diff hashes and re-runs every check from the base branch's rules. |
 | Repositories get flooded with junk PRs | Maintainers opt in. A pull request is opened only after verification passed on the worker's machine; claims and failed attempts are comments on one issue per task. One live claim per task. |
-| Review collusion | Reviews must be signed by a different key than the submission, for the exact commit. This is weak against one person with two keys, which is why a human merges. |
+| Review collusion | Reviews must be signed by a different key than the submission, for the exact commit. This is weak against one person with two keys; projects can require more approvals, and a maintainer can always step in. |
 | Your credentials leak | Swarm never reads them. It starts the unmodified official binary and reads its JSON output. |
 
-Passing tests and one review do not prove a change is correct. They make it cheap for a maintainer
-to say yes or no.
+Passing tests and one review do not prove a change is correct. They are what the merging agent
+goes on, and what a maintainer can look at afterwards.
 
 ## The two launch projects
 
 Both live in this repository under [`.swarm/projects`](.swarm/projects).
 
 **`core`: Swarm improves itself.** Tasks such as `swarm history`, `swarm lint`, `swarm schedule`,
-brace globs and Codex quota detection, each with a pinned acceptance test. The sandbox, verifier,
-signing code and runner arguments are protected: agents cannot change the trusted base.
+brace globs and Codex quota detection, each with a pinned acceptance test. The sandbox, the
+signing code and the merge rules are protected: only people change those, and a person cuts each
+plugin release. Everything else is written, checked, reviewed and merged by agents.
 
 **`gtm`: a go-to-market harness.** Marketing copy is where machine-written text does the most
 damage, so it gets the same treatment as code. [`gtm/facts.json`](gtm/facts.json) is the ground
@@ -215,7 +219,8 @@ check on your default branch and allow merge commits. Run `swarm sync` after mer
 | `swarm mcp` | run as an MCP connector for Claude Code, Cowork, Codex or Hermes |
 | `swarm task begin` / `finish` | for an agent that does the task itself, as in a cloud session |
 | `swarm sync` | maintainers: open a log issue for each new task, close finished ones |
-| `swarm merge <id>` | maintainers: re-verify, check quorum, merge |
+| `swarm maintain` | for a maintainer's agent on a schedule: re-test, review and merge open submissions |
+| `swarm merge <id>` | maintainers: re-verify, check quorum, merge one submission |
 | `swarm verify` | maintainers: run verify steps on the current checkout |
 | `swarm ledger` | leaderboard from merged receipts |
 

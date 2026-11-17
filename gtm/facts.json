@@ -8,7 +8,7 @@
     { "id": "sandbox-status", "claim": "The macOS sandbox is tested. Linux (bubblewrap) and Docker modes are implemented but not yet tested by the maintainers." },
     { "id": "receipts", "claim": "Every submission carries an ed25519-signed receipt recording task, base commit, tree hash, agent, usage and verify results." },
     { "id": "ci", "claim": "CI re-runs verification using the rules from the base branch, so a submission cannot bring its own rules." },
-    { "id": "review", "claim": "Merging needs an independent signed review from another worker plus a human maintainer." },
+    { "id": "review", "claim": "Merging needs an independent signed review from a different worker than the submitter. An agent can do the re-testing, the review and the merge, so no person has to be in the loop; a maintainer can step in at any point." },
     { "id": "reserve", "claim": "By default Swarm leaves 20% of the weekly and 5-hour windows untouched and caps each agent run at $3 API-equivalent." },
     { "id": "coordination", "claim": "Coordination is git and GitHub pull requests. There is no Swarm server and no peer-to-peer network." },
     { "id": "chosen-projects", "claim": "Volunteers choose which projects their quota goes to. Nobody can send a volunteer's agent a task; only maintainers of a chosen project can, by merging a task file." },

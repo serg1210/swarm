@@ -90,10 +90,11 @@ It asks what you tried, where it stopped, and for Swarm's output.
 
 - GitHub holds the `verify` workflow on a first-time contributor's pull request until you click
   **Approve and run** on that pull request. Check for held runs, or testers will see no check.
-- Merge a submission once a different tester has approved it:
+- Let an agent handle review and merging: this re-tests every open submission, reviews the ones
+  from other people, and merges those with an independent approval.
 
 ```bash
-npx -y github:serg1210/swarm merge <pull request number>
+npx -y github:serg1210/swarm maintain
 ```
 
 - Reports arrive as issues titled `[pilot]`.

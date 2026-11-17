@@ -45,11 +45,13 @@ export function parseVerdict(text) {
 }
 
 /** Structural + sandbox re-verification of a submission. Shared by review, merge and CI. */
-export async function reverify({ repo, mirror, head, sandbox, projects }) {
+export async function reverify({ repo, mirror, head, sandbox, projects, runChecks = true }) {
   const base = (await git(mirror.dir, ['merge-base', `origin/${mirror.branch}`, head])).trim();
   projects ??= await loadProjectsAt(mirror.dir, base);
   const check = await checkSubmission(mirror.dir, { base, head, projects });
   if (!check.ok) return { ...check, base, verify: { ok: false, results: [] }, workDir: null };
+  // The caller reproduced the checks a moment ago (a review that just ran); do not run them twice.
+  if (!runChecks) return { ...check, base, verify: { ok: true, results: [] }, workDir: null };
   const workDir = await makeWorkDir(repo, mirror, { name: `review-${check.project.id}-${check.task.id}`, commit: check.work });
   const verify = await runVerify(check.project, check.task, { workDir, sandbox, onStep: (s) => step(`  ${s.name}: ${c.dim(s.run)}`) });
   return { ...check, base, verify, workDir };

@@ -11,7 +11,8 @@ import { getRunner, detectRunners } from './runners/index.mjs';
 import { GitBoard } from './board/git.mjs';
 import { GitHubBoard } from './board/github.mjs';
 import { workOn, openTasks } from './worker.mjs';
-import { reviewSubmission, reverify, tallyReviews } from './review.mjs';
+import { reviewSubmission } from './review.mjs';
+import { mergeIfReady } from './merge.mjs';
 import { checkSubmission, readLedger } from './receipt.mjs';
 import { git, runVerify, describeFailure } from './verify.mjs';
 import { leaderboard, renderLeaderboard } from './ledger.mjs';
@@ -42,6 +43,7 @@ ${c.bold('For an agent that does the task itself')} (cloud sessions, any host wi
 ${c.bold('Maintainer')}
   swarm verify [--project <id>] [--task <id>]    run a project's verify steps on the current checkout
   swarm sync                                     open a log issue for each new task, close finished ones
+  swarm maintain                                 for an agent on a schedule: re-test, review and merge open submissions
   swarm merge <submission>                       re-verify, check review quorum, merge
   swarm ledger [--json]                          leaderboard from merged receipts
   swarm ci --base <sha>                          verification entry point for CI
@@ -163,6 +165,13 @@ export function quotaDecision(rateLimit, { reserve = 0.2, onlyIfExpiringHours } 
     if (hours > onlyIfExpiringHours) return { go: false, reason: `weekly window resets in ${Math.round(hours)}h, more than ${onlyIfExpiringHours}h away` };
   }
   return { go: true, reason: 'within your limits' };
+}
+
+/** Options for the protected merge step, from the command line. */
+async function mergeOptions(ctx, sub, args) {
+  const project = ctx.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
+  const opts = await runOptions(args, ctx.config, project);
+  return { sandbox: opts.sandbox, force: Boolean(args.force), dryRun: Boolean(args['dry-run']) };
 }
 
 const commands = {
@@ -404,20 +413,44 @@ const commands = {
     const ctx = await context(args);
     const sub = (await ctx.board.submissions()).find((s) => String(s.id) === String(id) || s.taskRef === id);
     if (!sub) throw new Error(`No open submission "${id}".`);
-    const head = await ctx.board.fetchSubmission(sub);
-    const project = ctx.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
-    const opts = await runOptions(args, ctx.config, project);
-    step(`Re-verifying ${sub.taskRef} (${sub.id}) in ${opts.sandbox} sandbox`);
-    const r = await reverify({ repo: ctx.repo, mirror: ctx.mirror, head, sandbox: opts.sandbox });
-    if (r.workDir) fs.rmSync(r.workDir, { recursive: true, force: true });
-    if (!r.ok) throw new Error(`Submission is not valid:\n${r.problems.map((p) => `- ${p}`).join('\n')}`);
-    if (!r.verify.ok) throw new Error(`Verification failed:\n${describeFailure(r.verify)}`);
-    const tally = tallyReviews(await ctx.board.reviews(sub), r.receipt);
-    log(c.dim(`  reviews: ${tally.approvals} approve, ${tally.rejections} reject; quorum ${r.project.review.quorum}`));
-    if (tally.rejections && !args.force) throw new Error('A reviewer rejected this submission. Read the review, then use --force if you disagree.');
-    if (tally.approvals < r.project.review.quorum && !args.force) throw new Error(`Needs ${r.project.review.quorum} independent approval(s); has ${tally.approvals}. Ask a volunteer to run \`swarm review\`, or use --force.`);
-    const merged = await ctx.board.merge(sub);
-    ok(`Merged ${sub.taskRef} → ${merged.where}`);
+    const res = await mergeIfReady(ctx, sub, await mergeOptions(ctx, sub, args));
+    if (!res.merged) throw new Error(res.reason);
+  },
+
+  /**
+   * The maintainer's pass, for an agent to run on a schedule: for every open submission,
+   * re-test it, review it if it is someone else's and not yet reviewed by this worker, and merge
+   * it once the project's rules are met. Nothing here lets a worker approve its own submission.
+   */
+  async maintain(args) {
+    const ctx = await context(args);
+    const runner = await pickRunner(args, ctx.config);
+    const subs = (await ctx.board.submissions()).slice(0, Number(args.max ?? 5));
+    if (!subs.length) return ok('No open submissions.');
+    const done = { reviewed: 0, merged: 0, waiting: 0, refused: 0 };
+    for (const sub of subs) {
+      let justVerified = false;
+      try {
+        const reviewedByMe = (await ctx.board.reviews(sub)).some((r) => r.signer?.id === ctx.identity.id && r.work === sub.head);
+        if (!sub.mine && !reviewedByMe) {
+          const project = ctx.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
+          const res = await reviewSubmission({ ...ctx, runner, sub, opts: await runOptions(args, ctx.config, project) });
+          if (res.status === 'reviewed') done.reviewed++;
+          justVerified = res.verdict === 'approve';
+        }
+        const res = await mergeIfReady(ctx, sub, { ...(await mergeOptions(ctx, sub, args)), runChecks: !justVerified });
+        if (res.merged) done.merged++;
+        else {
+          warn(`${sub.taskRef} (${sub.id}): ${res.reason.split('\n')[0]}`);
+          if (res.waiting) done.waiting++;
+          else done.refused++;
+        }
+      } catch (err) {
+        done.refused++;
+        fail(`${sub.taskRef} (${sub.id}): ${err.message.split('\n')[0]}`);
+      }
+    }
+    log(`\n${c.bold('Maintain')}: ${done.reviewed} reviewed, ${done.merged} merged, ${done.waiting} waiting for another reviewer, ${done.refused} not mergeable.`);
   },
 
   async verify(args) {
