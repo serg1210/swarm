@@ -209,10 +209,31 @@ const commands = {
     try {
       const mode = await pickSandbox({});
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swarm-doctor-'));
-      const probe = `echo ok > inside.txt && ! ls ${JSON.stringify(path.join(os.homedir(), '.ssh'))} >/dev/null 2>&1 && ! echo x > ${JSON.stringify(path.join(os.homedir(), '.swarm-escape-test'))} 2>/dev/null`;
+      // Judged from outside: some sandboxes show an empty, writable stand-in for the home
+      // directory, so a write "succeeding" inside proves nothing either way.
+      const home = os.homedir();
+      const escape = path.join(home, '.swarm-escape-test');
+      const secret = fs.readdirSync(home).map((n) => path.join(home, n)).find((p) => {
+        try {
+          return fs.statSync(p).isFile() && fs.statSync(p).size > 0;
+        } catch {
+          return false;
+        }
+      });
+      const probe = `echo ok > inside.txt || exit 3; echo x > ${JSON.stringify(escape)} 2>/dev/null; ${secret ? `cat ${JSON.stringify(secret)} >/dev/null 2>&1 && exit 4; ` : ''}exit 0`;
       const res = await runSandboxed(probe, { workDir: tmp, mode, timeoutMs: 20_000 });
+      const wroteInside = fs.existsSync(path.join(tmp, 'inside.txt'));
+      const escaped = fs.existsSync(escape);
+      if (escaped) fs.rmSync(escape, { force: true });
       fs.rmSync(tmp, { recursive: true, force: true });
-      check(res.code === 0, `sandbox: ${mode}`, res.code === 0 ? 'home directory hidden, writes confined' : 'self-test failed: the sandbox did not isolate');
+      const why = escaped
+        ? 'a write to the home directory got out'
+        : res.code === 4
+          ? 'a file in the home directory was readable'
+          : !wroteInside || res.code !== 0
+            ? `could not run in the work directory: ${(res.stderr || '').trim().split('\n').pop() || `exit ${res.code}`}`
+            : '';
+      check(!why, `sandbox: ${mode}`, why ? `self-test failed: ${why}` : 'home directory hidden, writes confined');
     } catch (err) {
       check(false, 'sandbox', err.message);
     }

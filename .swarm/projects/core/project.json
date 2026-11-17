@@ -18,6 +18,7 @@
       "timeoutSec": 300
     }
   ],
+  "sandbox": { "image": "node:22-bookworm" },
   "limits": {
     "maxFilesChanged": 20,
     "maxDiffLines": 1000

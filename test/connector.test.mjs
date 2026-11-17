@@ -14,7 +14,8 @@ const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin',
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'swarm-mcp-')));
 const remote = path.join(tmp, 'remote.git');
 const GIT_ENV = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', GIT_CONFIG_GLOBAL: '/dev/null' };
-const nested = Boolean(process.env.SWARM_SANDBOX) || process.platform !== 'darwin';
+// SWARM_TEST_SANDBOX=auto makes Linux use its real sandbox (bubblewrap) instead of none.
+const nested = Boolean(process.env.SWARM_SANDBOX) || (process.platform !== 'darwin' && process.env.SWARM_TEST_SANDBOX !== 'auto');
 
 function sh(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, env: { ...process.env, ...GIT_ENV }, encoding: 'utf8' });
@@ -27,11 +28,13 @@ const write = (file, text) => {
 };
 
 /** A minimal MCP client: one JSON-RPC message per line. */
+// Every server started here is killed at the end, so a failing test fails instead of hanging.
+const children = [];
 function connect(home, env = {}) {
-  const child = spawn(process.execPath, [BIN, 'mcp'], {
+  const child = (children[children.length] = spawn(process.execPath, [BIN, 'mcp'], {
     env: { ...process.env, ...GIT_ENV, SWARM_HOME: path.join(tmp, home), ...(nested ? { SWARM_UNSAFE_NO_SANDBOX: '1' } : {}), ...env },
     stdio: ['pipe', 'pipe', 'ignore'],
-  });
+  }));
   const waiting = new Map();
   readline.createInterface({ input: child.stdout }).on('line', (line) => {
     const msg = JSON.parse(line); // anything that is not protocol on stdout fails the test here
@@ -70,7 +73,10 @@ test.before(() => {
   sh('git', ['push', '-q', remote, 'main'], seed);
 });
 
-test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+test.after(() => {
+  for (const child of children) child.kill();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
 
 const refs = (prefix) => sh('git', ['for-each-ref', '--format=%(refname)', prefix], remote).split('\n').filter(Boolean);
 

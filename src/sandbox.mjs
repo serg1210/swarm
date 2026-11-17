@@ -20,11 +20,39 @@ export async function pickSandbox({ requested = 'auto', project } = {}) {
   // Checked first: nested OS sandboxes are unreliable inside the cloud VM's container.
   if (process.env.CLAUDE_CODE_REMOTE === 'true') return 'cloud-vm';
   if (process.platform === 'darwin' && fs.existsSync('/usr/bin/sandbox-exec')) return 'seatbelt';
-  if (process.platform === 'linux' && (await which('bwrap'))) return 'bwrap';
+  let broken = '';
+  if (process.platform === 'linux' && (await which('bwrap'))) {
+    broken = await bwrapProblem();
+    if (!broken) return 'bwrap';
+  }
   if (project?.sandbox?.image && (await which('docker'))) return 'docker';
+  if (broken) throw new Error(broken);
   throw new Error(
     'No sandbox available. Install bubblewrap (Linux) or Docker, or pass --unsafe-no-sandbox to run verify commands unsandboxed.',
   );
+}
+
+let bwrapProbe;
+/**
+ * Empty when bubblewrap can build a sandbox as this user, otherwise what went wrong and what to
+ * do about it. Being installed is not enough: Ubuntu 24.04 and newer stop ordinary users from
+ * creating the namespaces it needs.
+ */
+export function bwrapProblem() {
+  bwrapProbe ??= run('bwrap', ['--ro-bind', '/', '/', '--unshare-pid', '--unshare-net', '/bin/sh', '-c', 'true'], { timeoutMs: 10_000 }).then(
+    (res) => {
+      if (res.code === 0) return '';
+      const why = (res.stderr || '').trim().split('\n').pop() || `exit ${res.code}`;
+      return [
+        `bubblewrap is installed but cannot build a sandbox as this user (${why}).`,
+        'On Ubuntu 24.04 and newer, AppArmor stops ordinary users from creating user namespaces. Either allow it',
+        'system-wide with `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (a security setting: your call),',
+        'or use Docker instead with `--sandbox docker` for projects that name a sandbox image.',
+      ].join(' ');
+    },
+    (err) => `bubblewrap could not be started: ${err.message}`,
+  );
+  return bwrapProbe;
 }
 
 const real = (p) => {
@@ -62,7 +90,12 @@ export function seatbeltProfile({ workDir, tmpDir, home, readDirs = [], network 
     '(version 1)',
     '(allow default)',
     network ? '' : '(deny network*)',
-    network ? '' : '(allow network* (local ip "localhost:*") (remote ip "localhost:*"))',
+    // Loopback only, so tests that start a local server still work. Each direction is spelled
+    // out: a bare `(allow network* (local ip "localhost:*"))` also matches outbound connections
+    // to any address, which is how this profile used to leak. test/sandbox.test.mjs dials out.
+    network ? '' : '(allow network-bind (local ip "localhost:*"))',
+    network ? '' : '(allow network-inbound (local ip "localhost:*"))',
+    network ? '' : '(allow network-outbound (remote ip "localhost:*"))',
     '(deny file-write*)',
     `(allow file-write* (subpath ${q(workDir)}) (subpath ${q(tmpDir)})`,
     '  (literal "/dev/null") (literal "/dev/tty") (literal "/dev/stdout") (literal "/dev/stderr")',

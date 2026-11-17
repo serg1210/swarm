@@ -14,7 +14,8 @@ const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'swarm-e2e-'))
 const remote = path.join(tmp, 'remote.git');
 const GIT_ENV = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', GIT_CONFIG_GLOBAL: '/dev/null' };
 // Nested OS sandboxes are not possible, and CI machines may have none: fall back to no sandbox there.
-const nested = Boolean(process.env.SWARM_SANDBOX) || process.platform !== 'darwin';
+// SWARM_TEST_SANDBOX=auto makes Linux use its real sandbox (bubblewrap) instead of none.
+const nested = Boolean(process.env.SWARM_SANDBOX) || (process.platform !== 'darwin' && process.env.SWARM_TEST_SANDBOX !== 'auto');
 const SANDBOX = nested ? ['--unsafe-no-sandbox'] : [];
 
 function sh(cmd, args, cwd) {

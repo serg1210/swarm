@@ -7,6 +7,7 @@
     { "name": "harness-tests", "run": "node --test gtm/test/*.test.mjs", "timeoutSec": 120 },
     { "name": "asset-checks", "run": "node gtm/verify.mjs", "timeoutSec": 120 }
   ],
+  "sandbox": { "image": "node:22-bookworm" },
   "limits": { "maxFilesChanged": 12, "maxDiffLines": 800 },
   "review": { "quorum": 1 },
   "replication": 1,

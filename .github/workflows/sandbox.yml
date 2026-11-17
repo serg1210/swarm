@@ -1,0 +1,75 @@
+name: sandbox
+
+# Runs the test suite with the real sandboxes switched on, on Linux and macOS, so "tested" in the
+# docs stays true: bubblewrap and Docker on Ubuntu, seatbelt on macOS. swarm-verify uses no
+# sandbox because its runner is itself a throwaway VM; this workflow is where the sandboxes
+# are exercised.
+#
+# It runs code from main only, never from a pull request.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install bubblewrap
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+      - name: What an Ubuntu 24.04 user sees before changing anything
+        run: node bin/swarm.mjs doctor || true
+      - name: Let ordinary users create user namespaces (what the doctor message asks for)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Doctor
+        run: node bin/swarm.mjs doctor 2>&1 | tee doctor.txt; grep -q '✓ sandbox: bwrap' doctor.txt
+      - name: Tests, with bubblewrap for every verify step and the Docker sandbox checked too
+        env:
+          SWARM_TEST_REQUIRE_SANDBOX: '1'
+          SWARM_TEST_SANDBOX: auto
+          SWARM_TEST_DOCKER_IMAGE: ubuntu:24.04
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          node --test test/*.test.mjs gtm/test/*.test.mjs
+      - name: This repository's own checks in bubblewrap
+        run: node bin/swarm.mjs verify --sandbox bwrap
+      - name: This repository's own checks in Docker
+        run: node bin/swarm.mjs verify --sandbox docker
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests, with seatbelt for every verify step
+        env:
+          SWARM_TEST_REQUIRE_SANDBOX: '1'
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          node --test test/*.test.mjs gtm/test/*.test.mjs
+      - name: This repository's own checks in seatbelt
+        run: node bin/swarm.mjs verify --sandbox seatbelt
