@@ -17,6 +17,7 @@ import { checkSubmission, readLedger } from './receipt.mjs';
 import { git, runVerify, describeFailure } from './verify.mjs';
 import { leaderboard, renderLeaderboard } from './ledger.mjs';
 import { readHistory, summarizeHistory } from './history.mjs';
+import { scheduleSnippet } from './schedule.mjs';
 
 const PKG = readJson(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'));
 const BOOLEANS = new Set(['dry-run', 'json', 'force', 'unsafe-no-sandbox', 'help', 'include-mine', 'no-verify', 'all', 'remove']);
@@ -31,6 +32,7 @@ ${c.bold('Volunteer')}
   swarm choose <repo>[#project]                  pick a project to donate to (--remove to drop it)
   swarm tasks [--repo <repo>]                    list tasks and their state
   swarm run [--task <project/task>] [options]    work on a task and submit it
+  swarm schedule [--hours <n>] [--max-tasks <n>]   print an hourly timer for expiring quota
   swarm review [--task <project/task>]           independently verify someone else's submission
   swarm history [--json]                         show what you have donated so far
   swarm mcp                                    run as an MCP connector (Claude Code, Cowork, Codex, Hermes)
@@ -385,6 +387,18 @@ const commands = {
       }
     }
     log(`\n${c.bold('Session')}: ${total.submitted} submitted, ${total.failed} failed, ${fmtUsd(total.costUsd)} API-equivalent quota used.`);
+  },
+
+  async schedule(args) {
+    const { text, installHint } = scheduleSnippet({
+      platform: process.platform,
+      nodePath: process.execPath,
+      binPath: fileURLToPath(new URL('../bin/swarm.mjs', import.meta.url)),
+      hours: args.hours,
+      maxTasks: args['max-tasks'],
+    });
+    log(text);
+    log(`\n${installHint}`);
   },
 
   async history(args) {

@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "kind": "receipt",
+  "project": "core",
+  "task": "schedule-command",
+  "base": "35ecaf4e6c9c556450c1ee4df1fdce55917abd84",
+  "work": "93df18c7ed6d56a8cea55ed2ede6763bf866e5d6",
+  "tree": "912522264871eaab713f2f5ca6aea9e15947ce60",
+  "diffSha256": "277f300b91548b2d712296a9f84990443d9ec9942e319046066c6987a6cac238",
+  "filesChanged": 3,
+  "linesChanged": 126,
+  "agent": {
+    "runner": "codex",
+    "model": "codex-default",
+    "version": null
+  },
+  "usage": {
+    "inputTokens": 616421,
+    "outputTokens": 4389,
+    "costUsd": 0,
+    "turns": 1,
+    "durationMs": 108946
+  },
+  "attempts": 1,
+  "sandbox": "seatbelt",
+  "verify": [
+    {
+      "name": "unit-tests",
+      "run": "node --test test/*.test.mjs",
+      "exit": 0,
+      "ms": 20561,
+      "outputSha256": "267da5b8d6d0f53f46d9f0fde77e1296f7287194845f124e207e616f8dc41094"
+    },
+    {
+      "name": "task-1",
+      "run": "node --test .swarm/projects/core/tasks/schedule-command.test.mjs",
+      "exit": 0,
+      "ms": 87,
+      "outputSha256": "1d5e9967f919da4ddd036eadc7077c5e76c25f51af0b2549bf3cb10622d8ba6d"
+    }
+  ],
+  "ts": "2026-11-17T23:26:39.720Z",
+  "signer": {
+    "id": "40553ad5eb16a363",
+    "handle": "serg1210",
+    "publicKey": "MCowBQYDK2VwAyEAwQ4qMVtkDJ1fGlPS9Yjqe2rUrpPnGUEVHRY2DPRQgQM="
+  },
+  "sig": "KVXNf4xN4bfeuG94Gb0QZa8+f3Gqk5oKeW2znUCTHz0G9sCpjBtqxGp9M5TQxzYLVdrafBIMAdyarmo7R6w+Bg=="
+}
