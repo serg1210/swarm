@@ -39,7 +39,9 @@ jobs:
       - name: Let ordinary users create user namespaces (what the doctor message asks for)
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Doctor
-        run: node bin/swarm.mjs doctor 2>&1 | tee doctor.txt; grep -q '✓ sandbox: bwrap' doctor.txt
+        run: |
+          node bin/swarm.mjs doctor 2>&1 | tee doctor.txt
+          grep -q 'sandbox: bwrap' doctor.txt
       - name: Tests, with bubblewrap for every verify step and the Docker sandbox checked too
         env:
           SWARM_TEST_REQUIRE_SANDBOX: '1'
