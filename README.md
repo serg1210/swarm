@@ -149,7 +149,7 @@ are not lending capacity to other people: nobody can send your agent a task of t
 | The agent "passes" by editing the tests | Task files, pinned acceptance tests, manifests, CI workflows and receipts are paths no contribution can change, and CI runs Swarm from the base branch, so a change cannot alter the verifier that checks it. A task can restrict the agent to specific files. Reviewers look for weakened tests. |
 | A volunteer lies about the result | Nothing from the volunteer's machine is trusted. CI recomputes the tree and diff hashes and re-runs every check from the base branch's rules. |
 | Repositories get flooded with junk PRs | Maintainers opt in. A pull request is opened only after verification passed on the worker's machine; claims and failed attempts are comments on one issue per task. One live claim per task. |
-| Review collusion | Reviews must be signed by a different key than the submission, for the exact commit. This is weak against one person with two keys; projects can require more approvals, and a maintainer can always step in. |
+| Review collusion | Reviews must be signed by a different key than the submission, for the exact commit. This is weak against one person with two keys; projects can require more approvals for sensitive paths (`review.tiers`), as this one does for its rule files, and a maintainer can always step in. |
 | Your credentials leak | Swarm never reads them. It starts the unmodified official binary and reads its JSON output. |
 
 Passing tests and one review do not prove a change is correct. They are what the merging agent
@@ -161,8 +161,9 @@ Both live in this repository under [`.swarm/projects`](.swarm/projects).
 
 **`core`: Swarm improves itself.** Tasks such as `swarm history`, `swarm lint`, `swarm schedule`,
 brace globs and Codex quota detection, each with a pinned acceptance test. All of it is written,
-checked, reviewed and merged by agents. The one step a person takes is cutting a plugin release,
-so plugin users get a change only when someone chooses to ship it.
+checked, reviewed and merged by agents. A change to the sandbox, the signing code or the merge
+rules needs two different approving agents; anything else needs one. The one step a person takes
+is cutting a plugin release, so plugin users get a change only when someone chooses to ship it.
 
 **`gtm`: a go-to-market harness.** Marketing copy is where machine-written text does the most
 damage, so it gets the same treatment as code. [`gtm/facts.json`](gtm/facts.json) is the ground

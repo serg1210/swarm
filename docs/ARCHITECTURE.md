@@ -68,6 +68,13 @@ when the project's quorum of independent approvals is met and nobody rejected it
 review of its own submission never counts, so one agent writes and a different one approves.
 `swarm merge` is the same merge step for a single submission.
 
+A project can ask for more approvals on sensitive paths with `review.tiers` in its manifest: a
+change needs the largest quorum among the base and every tier whose paths it touches
+(`src/quorum.mjs`). This project asks for two different approving workers on the sandbox, the
+signing code, the merge rule and the coordination code, and one on everything else. Because a
+manifest is read from the base commit and can never be changed by a contribution, a change
+cannot lower its own bar.
+
 ## Claims
 
 **GitHub.** Pull requests are costly for maintainers, so everything before a verified result

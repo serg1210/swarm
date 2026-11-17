@@ -23,7 +23,28 @@
     "maxDiffLines": 1000
   },
   "review": {
-    "quorum": 1
+    "quorum": 1,
+    "tiers": [
+      {
+        "paths": [
+          "src/sandbox.mjs",
+          "src/verify.mjs",
+          "src/identity.mjs",
+          "src/receipt.mjs",
+          "src/review.mjs",
+          "src/merge.mjs",
+          "src/quorum.mjs",
+          "src/project.mjs",
+          "src/repo.mjs",
+          "src/open.mjs",
+          "src/util.mjs",
+          "src/board/**",
+          "src/session.mjs",
+          "src/runners/**"
+        ],
+        "quorum": 2
+      }
+    ]
   },
   "replication": 1,
   "claimTtlMinutes": 90

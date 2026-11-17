@@ -33,7 +33,8 @@ optional; the defaults are shown in brackets.
 - `verify` (`[]`): steps run for every task in this project. Each needs `name` and `run` (a shell
   command run from the repository root); `timeoutSec` defaults to 300.
 - `limits` (`{ "maxFilesChanged": 40, "maxDiffLines": 2000 }`): a larger diff is rejected.
-- `review` (`{ "quorum": 1 }`): independent approvals `swarm merge` needs.
+- `review` (`{ "quorum": 1 }`): independent approvals a merge needs. Add `tiers` to ask for
+  more on sensitive paths, for example `"tiers": [{ "paths": ["src/auth/**"], "quorum": 2 }]`.
 - `replication` (`1`): how many workers may hold a live claim on the same task at once.
 - `claimTtlMinutes` (`90`): when an unfinished claim lapses and the task reopens.
 - `sandbox` (none): `image` names a Docker image, used when neither macOS `sandbox-exec` nor

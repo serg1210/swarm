@@ -40,11 +40,12 @@ test.before(() => {
   const seed = path.join(tmp, 'seed');
   write(
     path.join(seed, '.swarm/projects/demo/project.json'),
-    JSON.stringify({ name: 'Demo', paths: ['src/**'], protect: ['check.mjs'], verify: [{ name: 'check', run: 'node check.mjs' }], review: { quorum: 1 } }),
+    JSON.stringify({ name: 'Demo', paths: ['src/**'], protect: ['check.mjs'], verify: [{ name: 'check', run: 'node check.mjs' }], review: { quorum: 1, tiers: [{ paths: ['src/rule.mjs'], quorum: 2 }] } }),
   );
   write(path.join(seed, '.swarm/projects/demo/tasks/add-greeting.md'), '---\ntitle: Add a greeting module\nsize: S\n---\nCreate src/greet.mjs exporting greet(name).\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-farewell.md'), '---\ntitle: Add a farewell module\nsize: S\n---\nCreate src/bye.mjs.\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-thanks.md'), '---\ntitle: Add a thanks module\nsize: S\n---\nCreate src/thanks.mjs.\n');
+  write(path.join(seed, '.swarm/projects/demo/tasks/change-rule.md'), '---\ntitle: Change a rule file\nsize: S\n---\nCreate src/rule.mjs.\n');
   write(path.join(seed, 'check.mjs'), "import fs from 'node:fs';\nfor (const f of fs.readdirSync('src')) { const m = await import('./src/' + f); if (typeof Object.values(m)[0] !== 'function') process.exit(1); }\n");
   write(path.join(seed, 'src/index.mjs'), 'export const main = () => 1;\n');
   sh('git', ['init', '-q', '-b', 'main'], seed);
@@ -166,4 +167,22 @@ test('maintain: one agent re-tests, reviews and merges what another agent submit
   assert.match(other.out, /demo\/add-farewell .*not valid/s);
   assert.match(other.out, /1 reviewed, 1 merged/);
   assert.match(sh('git', ['ls-tree', '-r', '--name-only', 'main'], remote), /src\/thanks\.mjs/);
+});
+
+test('a change to a rule file needs two different approving agents', () => {
+  assert.match(run('alice', 'demo/change-rule', "echo 'export const rule = () => 2;' > src/rule.mjs").out, /Submitted demo\/change-rule/);
+  const maintain = (home) => swarm(home, ['maintain', '--repo', remote, '--runner', 'mock', ...SANDBOX], { SWARM_MOCK_CMD: 'printf "Fine.\\nVERDICT: APPROVE\\n"' });
+
+  // One approving agent is not enough for this path, and approving twice does not help.
+  const first = maintain('bob');
+  assert.match(first.out, /Review posted: approve/, first.out);
+  assert.match(first.out, /demo\/change-rule .*Needs 2 independent approval\(s\); has 1/s);
+  assert.match(maintain('bob').out, /Needs 2 independent approval\(s\); has 1/);
+  assert.doesNotMatch(sh('git', ['ls-tree', '-r', '--name-only', 'main'], remote), /src\/rule\.mjs/);
+
+  // A second, different worker's agent approves, and it merges.
+  const second = maintain('carol');
+  assert.match(second.out, /Review posted: approve/, second.out);
+  assert.match(second.out, /Merged demo\/change-rule/);
+  assert.match(sh('git', ['ls-tree', '-r', '--name-only', 'main'], remote), /src\/rule\.mjs/);
 });

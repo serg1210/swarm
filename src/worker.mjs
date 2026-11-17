@@ -7,6 +7,7 @@ import { completedTasks, protectedGlobs, verifySteps, receiptPath } from './proj
 import { git, diffSummary, checkPolicy, runVerify, describeFailure } from './verify.mjs';
 import { buildReceipt } from './receipt.mjs';
 import { makeWorkDir } from './repo.mjs';
+import { requiredQuorum } from './quorum.mjs';
 
 export function buildPrompt({ project, task, feedback, hints, mode = 'cli', workDir, session }) {
   const cloud = process.env.CLAUDE_CODE_REMOTE === 'true';
@@ -175,7 +176,7 @@ export async function workOn({ repo, mirror, board, identity, runner, project, t
       ok(`Dry run: nothing pushed. Result is in ${workDir}`);
       return { status: 'dry-run', usage, rateLimit, workDir, receipt };
     }
-    const sub = await board.submit({ workDir, branch, claim, project, task, receipt, summary });
+    const sub = await board.submit({ workDir, branch, claim, project, task, receipt, summary, approvalsNeeded: requiredQuorum(project, diff.files.map((f) => f.file)) });
     record({ repo: repo.slug, task: task.ref, status: 'submitted', usage, runner: runner.name, where: sub.where });
     ok(`Submitted ${c.bold(task.ref)} → ${sub.where}  ${c.dim(`(${fmtUsd(usage.costUsd)} API-equivalent, ${fmtDuration(usage.durationMs)})`)}`);
     fs.rmSync(workDir, { recursive: true, force: true });

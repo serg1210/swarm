@@ -15,6 +15,7 @@ import { git, diffSummary, checkPolicy, runVerify, describeFailure } from './ver
 import { pickSandbox } from './sandbox.mjs';
 import { makeWorkDir } from './repo.mjs';
 import { openRepo } from './open.mjs';
+import { requiredQuorum } from './quorum.mjs';
 import { buildPrompt, openTasks, sealWork, record } from './worker.mjs';
 
 export const MAX_FINISH_ATTEMPTS = 3;
@@ -161,7 +162,7 @@ export async function finishSession(id, { identity, summary }) {
 
   const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0, turns: 0, durationMs: Date.now() - new Date(session.startedAt).getTime() };
   const receipt = await sealWork({ workDir: session.workDir, project, task, base: mirror.base, diff, agent: session.agent, usage, verify, sandbox, attempts: session.attempts + 1, identity });
-  const sub = await board.submit({ workDir: session.workDir, branch: session.workBranch, claim: session.claim, project, task, receipt, summary: String(summary || '').slice(0, 6000) });
+  const sub = await board.submit({ workDir: session.workDir, branch: session.workBranch, claim: session.claim, project, task, receipt, summary: String(summary || '').slice(0, 6000), approvalsNeeded: requiredQuorum(project, diff.files.map((f) => f.file)) });
   return close(session, ctx, 'submitted', {
     result: { ok: true, final: true, task: task.ref, where: sub.where, verified: verify.results.map((r) => r.name), filesChanged: diff.files.length, linesChanged: diff.lines, sandbox },
   });
