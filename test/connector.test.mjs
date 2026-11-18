@@ -105,8 +105,10 @@ test('briefing: what the host shows before anything is spent', async () => {
   assert.equal(demo.chosen, true);
   assert.ok(demo.openTasks >= 1);
   assert.match(b.next.task, /^demo\//);
-  assert.equal(b.steps.length, 6);
-  assert.ok(b.steps[1].startsWith('Project: Demo'));
+  assert.equal(b.steps.length, 7);
+  assert.equal(b.willRun, true);
+  assert.match(b.steps[0], /agent/);
+  assert.ok(b.steps[2].startsWith('Accelerating Demo: 1 of '));
   assert.ok(b.steps.every((line) => line.split(/\s+/).length <= 7));
   assert.ok(b.choices.some((ch) => ch.id === demo.id && ch.current));
   assert.ok(b.text.length >= 2);
@@ -199,6 +201,8 @@ test('delegate mode: a background job runs the CLI and can be polled', async () 
   }
   assert.equal(status.state, 'finished');
   assert.match(status.log, /Submitted demo\/three/, status.log);
+  // The finished job is on the last checklist step, and says so in the status line.
+  assert.deepEqual({ step: status.progress.step, done: status.progress.done, status: status.progress.status }, { step: 7, done: true, status: 'Pull request opened' });
   assert.equal(refs('refs/heads/swarm').filter((r) => r.includes('/three/')).length, 1);
   c.close();
 });
