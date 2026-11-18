@@ -164,6 +164,22 @@ test('leaderboard counts only valid receipts', () => {
   assert.equal(b.workers[0].tasks, 2);
 });
 
+test('leaderboard totals each project, with hourly buckets for recent work', () => {
+  const now = new Date().toISOString();
+  const r = (project, id, handle, cost, ts, valid = true) => ({ kind: 'receipt', valid, project, task: 't', signer: { id, handle }, usage: { costUsd: cost, inputTokens: 10, outputTokens: 5 }, agent: { runner: 'claude' }, linesChanged: 5, ts });
+  const b = leaderboard([r('core', '1', 'ann', 1.5, now), r('core', '2', 'bob', 0.5, now), r('core', '1', 'ann', 2, '2020-01-01T00:00:00.000Z'), r('constructor', '1', 'ann', 1, now), r('core', '3', 'eve', 99, now, false)]);
+  const core = b.byProject.core;
+  assert.deepEqual([core.tasks, core.costUsd, core.tokens, core.linesChanged], [3, 4, 45, 15]);
+  assert.deepEqual([core.people, core.agents, core.weekAgents], [['ann', 'bob'], ['1', '2'], ['1', '2']]);
+  assert.equal(core.first, '2020-01-01T00:00:00.000Z');
+  assert.deepEqual(core.workers.map((w) => [w.handle, w.tasks, w.costUsd]), [['ann', 2, 3.5], ['bob', 1, 0.5]]);
+  // Only the last 8 days are bucketed, by UTC hour.
+  assert.deepEqual({ ...core.hours }, { [now.slice(0, 13)]: { costUsd: 2, tasks: 2 } });
+  // A project id that is also an Object.prototype name is just a key.
+  assert.equal(b.byProject.constructor.tasks, 1);
+  assert.equal(b.recent[0].tokens, 15);
+});
+
 test('repository specs', () => {
   assert.deepEqual(resolveRepo('acme/tool'), { kind: 'github', url: 'https://github.com/acme/tool.git', slug: 'acme--tool', github: 'acme/tool' });
   assert.equal(resolveRepo('https://github.com/acme/tool').github, 'acme/tool');
