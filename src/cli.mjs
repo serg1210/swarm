@@ -16,6 +16,7 @@ import { mergeIfReady } from './merge.mjs';
 import { checkSubmission, readLedger } from './receipt.mjs';
 import { git, runVerify, describeFailure } from './verify.mjs';
 import { leaderboard, renderLeaderboard } from './ledger.mjs';
+import { lintRepo } from './lint.mjs';
 import { readHistory, summarizeHistory } from './history.mjs';
 
 const PKG = readJson(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'));
@@ -42,6 +43,7 @@ ${c.bold('For an agent that does the task itself')} (cloud sessions, any host wi
 
 ${c.bold('Maintainer')}
   swarm verify [--project <id>] [--task <id>]    run a project's verify steps on the current checkout
+  swarm lint                                     check .swarm/projects manifests and task files
   swarm sync                                     open a log issue for each new task, close finished ones
   swarm maintain                                 for an agent on a schedule: re-test, review and merge open submissions
   swarm merge <submission>                       re-verify, check review quorum, merge
@@ -476,6 +478,16 @@ const commands = {
       }
     }
     log(`\n${c.bold('Maintain')}: ${done.reviewed} reviewed, ${done.merged} merged, ${done.waiting} waiting for another reviewer, ${done.refused} not mergeable.`);
+  },
+
+  async lint() {
+    const problems = lintRepo(process.cwd());
+    for (const p of problems) log(`${p.file}: ${p.problem}`);
+    if (problems.length) {
+      process.exitCode = 1;
+      return;
+    }
+    ok('swarm lint: OK');
   },
 
   async verify(args) {
