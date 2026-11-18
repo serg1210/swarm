@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "kind": "receipt",
+  "project": "core",
+  "task": "docs-connector",
+  "base": "e328e7b27216165a2f488f487f3366b857598978",
+  "work": "1e42bfbcf70df180fc3f3181d4812b5b32d30f7d",
+  "tree": "257e94d7c6eb6378d824d3f086184825621f788e",
+  "diffSha256": "1ca0062cf4723f2a8970ebba779dfad0add8a9749dbc0abbc2cd0e486126c860",
+  "filesChanged": 1,
+  "linesChanged": 92,
+  "agent": {
+    "runner": "claude",
+    "model": "claude-fable-5-2",
+    "version": "2.1.326"
+  },
+  "usage": {
+    "inputTokens": 138893,
+    "outputTokens": 5723,
+    "costUsd": 0.7510164,
+    "turns": 12,
+    "durationMs": 51009
+  },
+  "attempts": 1,
+  "sandbox": "seatbelt",
+  "verify": [
+    {
+      "name": "unit-tests",
+      "run": "node --test test/*.test.mjs",
+      "exit": 0,
+      "ms": 23495,
+      "outputSha256": "95543cfc0fff1e536f697b7389269b5338611dc56ea3a9868d0574387445d5c2"
+    },
+    {
+      "name": "task-1",
+      "run": "node --test .swarm/projects/core/tasks/docs-connector.test.mjs",
+      "exit": 0,
+      "ms": 111,
+      "outputSha256": "2f0797022ca0c5aad65cfe33a633d668c48a2203bdcd546c54aafe582f41d8e1"
+    }
+  ],
+  "ts": "2026-11-18T15:39:27.638Z",
+  "signer": {
+    "id": "40553ad5eb16a363",
+    "handle": "serg1210",
+    "publicKey": "MCowBQYDK2VwAyEAwQ4qMVtkDJ1fGlPS9Yjqe2rUrpPnGUEVHRY2DPRQgQM="
+  },
+  "sig": "mKR321B4P1l6eQ4S0GYC/fhTGcaq5tZrqkKsRZd5Ee0Aokl7S7k4xPlAV4jvhIeuzRPYxqkAsvIshS2OnizmBw=="
+}
