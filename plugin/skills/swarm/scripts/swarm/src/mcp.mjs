@@ -21,7 +21,8 @@ import { pickSandbox } from './sandbox.mjs';
 import { detectRunners, getRunner } from './runners/index.mjs';
 import { openRepo } from './open.mjs';
 import { openTasks } from './worker.mjs';
-import { targets, loadConfig, saveConfig, defaultHandle, quotaDecision } from './cli.mjs';
+import { jobProgress } from './briefing.mjs';
+import { targets, loadConfig, saveConfig, defaultHandle, quotaDecision, gatherBriefing } from './cli.mjs';
 import * as sessions from './session.mjs';
 
 const PKG = readJson(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'));
@@ -56,7 +57,10 @@ function jobStatus(id) {
   if (!job) throw new Error(`No job "${id}".`);
   const log = fs.existsSync(job.log) ? fs.readFileSync(job.log, 'utf8') : '';
   const running = job.exit === undefined && alive(job.pid);
-  return { job: id, kind: job.kind, state: running ? 'running' : 'finished', exitCode: job.exit ?? null, startedAt: job.startedAt, log: tail(log, 40) };
+  const status = { job: id, kind: job.kind, state: running ? 'running' : 'finished', exitCode: job.exit ?? null, startedAt: job.startedAt };
+  // For a donate run: which checklist step it is on and a few words on what it is doing now.
+  if (job.kind === 'donate') status.progress = jobProgress(log);
+  return { ...status, log: tail(log, 40) };
 }
 
 function runningJob() {
@@ -145,6 +149,15 @@ export const TOOLS = [
     },
   },
   {
+    name: 'swarm_brief',
+    description: 'What to show the user before any quota is spent: how much of their quota is left and how much Swarm may use, the one task the next run would do and for which project, and the other projects they could choose instead (with a description and open-task count each, ready for a choice box). Reads the Claude plan windows (one tiny request) unless probe_quota is false. Call it before swarm_donate or swarm_begin and show the result.',
+    inputSchema: S({ probe_quota: { type: 'boolean', description: 'Read the 5-hour and weekly quota windows (default true).' }, repo: REPO, project: str('Only this project id.') }),
+    readOnly: true,
+    async run(a) {
+      return gatherBriefing({ args: { repo: a.repo, project: a.project }, probeQuota: a.probe_quota !== false, identity: await identity() });
+    },
+  },
+  {
     name: 'swarm_choose',
     description: 'Show, add or remove the projects the user\'s quota goes to. Only change this list when the user asked you to.',
     inputSchema: S({ repo: str('Project to add or remove, as owner/name or owner/name#project. Omit to just list.'), remove: { type: 'boolean' } }),
@@ -220,7 +233,7 @@ export const TOOLS = [
   },
   {
     name: 'swarm_job',
-    description: 'Status and recent output of a background job started by swarm_donate, swarm_review or swarm_maintain.',
+    description: 'Status and recent output of a background job started by swarm_donate, swarm_review or swarm_maintain. For a donate run, `progress.step` is the checklist step from swarm_brief it has reached (1-based) and `progress.now` says in a few words what it is doing.',
     inputSchema: S({ job: str('Job id.') }, ['job']),
     readOnly: true,
     async run(a) {

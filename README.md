@@ -11,7 +11,8 @@ going to use is spent doing tasks that project's maintainers wrote.
 3. **Leftover quota does the work.** Claude offers to schedule it: on your computer, where Swarm
    reads your quota windows and keeps a 20% reserve, or in the cloud, where it runs with your
    laptop closed shortly before your weekly window resets. Each run does one task and opens a
-   pull request under your GitHub account.
+   pull request under your GitHub account. You see each run as a short checklist that ticks
+   itself off: quota left, project, task, checks, pull request.
 
 Your tokens are spent by your own Claude, on a project you chose. Nothing is pooled or relayed.
 What Swarm adds around the agent is the part that makes the result worth a maintainer's time: it

@@ -6,9 +6,14 @@ Three things to settle with the user, in this order. Ask, do not assume.
 
 ## 1. Choose a project
 
-1. Run `SWARM projects --json` (or call `swarm_tasks`) and show the projects that opted in, with
-   their descriptions. The user may also name any repository that has a `.swarm` directory.
-2. Let the user pick one or more. Do not pick for them.
+1. Get the briefing: call `swarm_brief`, or run `SWARM brief --json`. Its `choices` list has every
+   project that opted in, with a short label and a description that includes how many tasks are
+   open and an example. Show the first line of `steps` (the quota) first, so the user knows what
+   they have to give. Keep everything you say here to short lines.
+2. Let the user pick, with this app's question or choice tool (AskUserQuestion in Claude Code; an
+   interactive choice elsewhere), one option per project using `label` and `description` as
+   given. If the app can only print text, list them with their descriptions and ask. The user may
+   also name any repository that has a `.swarm` directory. Do not pick for them.
 3. On the user's own computer, save the choice: `SWARM choose owner/repo#project` (or the
    `swarm_choose` tool). In a cloud session nothing is saved between runs, so the choice goes into
    the scheduled task's prompt instead (step 3).

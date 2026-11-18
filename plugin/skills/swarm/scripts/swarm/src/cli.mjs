@@ -16,10 +16,13 @@ import { mergeIfReady } from './merge.mjs';
 import { checkSubmission, readLedger } from './receipt.mjs';
 import { git, runVerify, describeFailure } from './verify.mjs';
 import { leaderboard, renderLeaderboard } from './ledger.mjs';
+import { lintRepo } from './lint.mjs';
 import { readHistory, summarizeHistory } from './history.mjs';
+import { buildBriefing } from './briefing.mjs';
+import { openRepo } from './open.mjs';
 
 const PKG = readJson(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'));
-const BOOLEANS = new Set(['dry-run', 'json', 'force', 'unsafe-no-sandbox', 'help', 'include-mine', 'no-verify', 'all', 'remove']);
+const BOOLEANS = new Set(['dry-run', 'json', 'force', 'unsafe-no-sandbox', 'help', 'include-mine', 'no-verify', 'all', 'remove', 'no-quota']);
 
 const HELP = `${c.bold('swarm')} ${PKG.version}: put spare Claude Code / Codex quota to work on verified open-source tasks
 
@@ -27,6 +30,7 @@ ${c.bold('Volunteer')}
   swarm init [--handle <name>] [--repo <repo>]   create your local identity
   swarm doctor                                   check tools, login and sandbox
   swarm quota                                    show your current rate-limit windows
+  swarm brief [--json]                           quota left, what the next run will do, and other projects you could choose
   swarm projects                                 list projects that opted in to Swarm
   swarm choose <repo>[#project]                  pick a project to donate to (--remove to drop it)
   swarm tasks [--repo <repo>]                    list tasks and their state
@@ -42,6 +46,7 @@ ${c.bold('For an agent that does the task itself')} (cloud sessions, any host wi
 
 ${c.bold('Maintainer')}
   swarm verify [--project <id>] [--task <id>]    run a project's verify steps on the current checkout
+  swarm lint                                     check .swarm/projects manifests and task files
   swarm sync                                     open a log issue for each new task, close finished ones
   swarm maintain                                 for an agent on a schedule: re-test, review and merge open submissions
   swarm merge <submission>                       re-verify, check review quorum, merge
@@ -167,6 +172,46 @@ export function quotaDecision(rateLimit, { reserve = 0.2, onlyIfExpiringHours } 
   return { go: true, reason: 'within your limits' };
 }
 
+/**
+ * Gathers what the briefing shows: the quota windows, the projects that opted in, the ones the
+ * user chose, and what is open in each. Reaching a repository can fail; that project is then
+ * listed as unreachable instead of failing the whole briefing.
+ */
+export async function gatherBriefing({ args = {}, probeQuota = true, identity } = {}) {
+  const config = loadConfig();
+  const cloud = process.env.CLAUDE_CODE_REMOTE === 'true';
+  const reserve = Number(args.reserve ?? config.reserve ?? 0.2);
+  let rateLimit = null;
+  // A cloud session has no quota windows to read, and asking would itself spend quota there.
+  if (probeQuota && !cloud && (await detectRunners()).includes('claude')) {
+    rateLimit = await getRunner('claude').probeQuota().catch(() => null);
+  }
+  const decision = rateLimit ? quotaDecision(rateLimit, { reserve }) : null;
+  const { projects: registry } = readJson(path.join(path.dirname(fileURLToPath(import.meta.url)), 'registry.json'));
+  const list = targets(args, config);
+  const chosen = list.map((t) => (t.project ? `${t.repo}#${t.project}` : t.repo));
+  const usingDefault = !(args.repo || process.env.SWARM_REPO) && !(config.chosen || []).length;
+  const tasksByRepo = {};
+  for (const spec of new Set([...list.map((t) => t.repo), ...registry.map((p) => p.repo)])) {
+    try {
+      const { mirror, board } = await openRepo(spec, identity);
+      const claims = await board.claims(mirror.projects);
+      tasksByRepo[spec] = openTasks(mirror.projects, mirror.dir, claims, { unpublished: board.unpublished }).map((r) => ({
+        project: r.project.id,
+        projectName: r.project.name,
+        projectDescription: r.project.description,
+        ref: r.task.ref,
+        title: r.task.title,
+        size: r.task.size,
+        state: r.state,
+      }));
+    } catch (err) {
+      tasksByRepo[spec] = { error: String(err.message).split('\n')[0] };
+    }
+  }
+  return buildBriefing({ rateLimit, decision, reserve, cloud, registry, chosen, usingDefault, tasksByRepo });
+}
+
 /** Options for the protected merge step, from the command line. */
 async function mergeOptions(ctx, sub, args) {
   const project = ctx.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
@@ -257,6 +302,21 @@ const commands = {
     log(describeWindow('weekly window', rl.weekly));
     const d = quotaDecision(rl, { reserve: Number(args.reserve ?? 0.2) });
     log(d.go ? c.green('→ Room to donate.') : c.yellow(`→ Not donating now: ${d.reason}.`));
+  },
+
+  /** Before a run: how much quota is left, what the next run will do, and what else could be chosen. */
+  async brief(args) {
+    const identity = loadIdentity() || createIdentity({ handle: await defaultHandle() });
+    const briefing = await gatherBriefing({ args, probeQuota: !args['no-quota'], identity });
+    if (args.json) return log(JSON.stringify(briefing, null, 2));
+    for (const line of briefing.text) log(line);
+    log('');
+    for (const p of briefing.projects) {
+      const count = p.openTasks == null ? 'unreachable' : `${p.openTasks} open`;
+      log(`${p.chosen ? c.green('●') : c.dim('○')} ${c.bold(p.name)} ${c.dim(p.id)}  ${count}`);
+      if (p.description) log(c.dim(`    ${p.description}`));
+    }
+    log(c.dim('\nChange project with: swarm choose <owner/name>#<project>'));
   },
 
   /** Projects that opted in, from the registry shipped with this release. */
@@ -476,6 +536,16 @@ const commands = {
       }
     }
     log(`\n${c.bold('Maintain')}: ${done.reviewed} reviewed, ${done.merged} merged, ${done.waiting} waiting for another reviewer, ${done.refused} not mergeable.`);
+  },
+
+  async lint() {
+    const problems = lintRepo(process.cwd());
+    for (const p of problems) log(`${p.file}: ${p.problem}`);
+    if (problems.length) {
+      process.exitCode = 1;
+      return;
+    }
+    ok('swarm lint: OK');
   },
 
   async verify(args) {
