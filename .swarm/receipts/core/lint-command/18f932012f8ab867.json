@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "kind": "receipt",
+  "project": "core",
+  "task": "lint-command",
+  "base": "11f8fb05e85e612ea7cba6d3e2204eeb5f27c78e",
+  "work": "cd463722e12a9fb32c28e0b9f75877a220694f25",
+  "tree": "38026a3c9ae9eb69af22ba416e5318efe9b13ef3",
+  "diffSha256": "fb6e8d1172b6980f01ef565014cd0bae25efae3d0a47269afbf285cc535c9b8b",
+  "filesChanged": 3,
+  "linesChanged": 115,
+  "agent": {
+    "runner": "shell:claude-code-cloud",
+    "model": "unreported",
+    "selfReported": true
+  },
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "costUsd": 0,
+    "turns": 0,
+    "durationMs": 37924
+  },
+  "attempts": 1,
+  "sandbox": "cloud-vm",
+  "verify": [
+    {
+      "name": "unit-tests",
+      "run": "node --test test/*.test.mjs",
+      "exit": 0,
+      "ms": 7143,
+      "outputSha256": "8ea19eb175815d998eca82481423afd6ee2d308ae5c4c09406cb139a5c65c136"
+    },
+    {
+      "name": "task-1",
+      "run": "node --test .swarm/projects/core/tasks/lint-command.test.mjs",
+      "exit": 0,
+      "ms": 94,
+      "outputSha256": "0a1a6144ffcb9655ee836820c32b1dc3c66b7a752dddeab316d0aca3dd114271"
+    }
+  ],
+  "ts": "2026-11-18T00:59:46.981Z",
+  "signer": {
+    "id": "18f932012f8ab867",
+    "handle": "serg1210",
+    "publicKey": "MCowBQYDK2VwAyEAra62R2BevvyjPZs6mNBr2igDt/0CRsuSlwpQyJTRtM4="
+  },
+  "sig": "b5+kFSwdFXGABu/op2PUKRI0s55ZTgFKnBCSyc9mK4Z90FTxj6W5s6niShpxRDi0kArFg+RelTqh2185s/NpCQ=="
+}
