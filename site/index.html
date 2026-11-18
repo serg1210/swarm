@@ -90,7 +90,7 @@
   .primary:hover { filter: brightness(1.08); }
   .primary:disabled { background: var(--track); color: var(--muted); cursor: default; filter: none; }
 
-  .join { margin: 0 22px 20px; padding: 16px 18px; background: var(--sage); border-left: 3px solid var(--moss); animation: open 0.22s ease-out; }
+  .join { margin: 0 22px 20px; padding: 16px 18px; background: var(--sage); border-left: 3px solid var(--moss); }
   .join p { margin: 0 0 10px; }
   .join p:last-child { margin: 0; font-size: 13.5px; color: var(--muted); }
   .join strong { font-weight: 600; }
@@ -98,6 +98,11 @@
   .cmd code { flex: 1; min-width: 0; font: 13.5px/1.5 var(--mono); color: var(--cmd-ink); overflow-wrap: anywhere; }
   .cmd button { background: var(--leaf); color: #0f1411; border: 0; border-radius: 4px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
   code { font: 0.92em var(--mono); }
+  .start { padding: 16px 18px 14px; }
+  .start .row { display: grid; grid-template-columns: 8.5em 1fr; gap: 0 14px; align-items: center; }
+  .start .row > span { font-size: 13.5px; color: var(--muted); padding-bottom: 8px; }
+  .start .cmd { margin: 0 0 8px; }
+  .start p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 
   .tabs { display: flex; gap: 4px; padding: 0 12px; background: var(--sage); border-top: 1px solid var(--rule); }
   .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 11px 12px 9px; cursor: pointer; color: var(--muted); }
@@ -144,6 +149,9 @@
     .ver { width: 42%; }
     .dhead { padding: 18px 16px 14px; }
     .join { margin: 0 16px 16px; }
+    .start { padding: 14px 16px 12px; }
+    .start .row { grid-template-columns: 1fr; }
+    .start .row > span { padding-bottom: 4px; }
     .list li { padding: 10px 16px; flex-wrap: wrap; }
     .list .ref { display: block; margin: 0; }
     .feed li { grid-template-columns: 64px 1fr; padding: 6px 16px; }
@@ -162,6 +170,15 @@
 <main>
   <h1>Put your leftover Claude quota to work on a project you choose.</h1>
   <p class="lead">Your own Claude does one task a maintainer wrote, runs the project's checks, and opens a pull request under your GitHub name.</p>
+
+  <section class="box" id="start" aria-labelledby="start-h">
+    <h2 id="start-h">Install the plugin</h2>
+    <div class="start">
+      <div class="row"><span>In Claude Code</span><div class="cmd"><code id="c-slash">/plugin install swarm --marketplace serg1210/swarm</code><button type="button" data-copy="c-slash">Copy</button></div></div>
+      <div class="row"><span>From a terminal</span><div class="cmd"><code id="c-term">claude plugin install swarm --marketplace serg1210/swarm</code><button type="button" data-copy="c-term">Copy</button></div></div>
+      <p>Then say <code>set up Swarm</code> and choose a project from the list below, or press a project's button. In the Claude desktop app or claude.ai: Customize, Plugins, Add marketplace, <code>serg1210/swarm</code>. You need Claude Code on your own plan, git, Node 20+ and the <a href="https://cli.github.com">gh</a> CLI logged in (<code>gh auth login</code>).</p>
+    </div>
+  </section>
 
   <div class="box" style="margin-bottom:28px">
     <table>
@@ -437,8 +454,8 @@
         </div>
         <button class="primary" id="work" ${next ? '' : 'disabled'}>${next ? cta(p) + ' &rarr;' : 'Nothing open'}</button>
       </div>
-      <div class="join" id="join" ${S.joining ? '' : 'hidden'}>
-        <p id="join-status"><strong>${esc(S.joinStatus || '')}</strong></p>
+      <div class="join" id="join">
+        <p id="join-status" ${S.joinStatus ? '' : 'hidden'}><strong>${esc(S.joinStatus || '')}</strong></p>
         <p>From a terminal, this installs the plugin and starts a task on ${esc(p.name)}:</p>
         <div class="cmd"><code id="cmd">${esc(`${install}; claude "${say}"`)}</code><button type="button" id="copy">Copy</button></div>
         <p>Needs Claude Code on your own plan, git, Node 20+ and the <a href="https://cli.github.com">gh</a> CLI logged in. In the desktop app or claude.ai: Customize, Plugins, Add marketplace, <code>${REPO}</code>, then say <code>${esc(say)}</code>.</p>
@@ -468,7 +485,7 @@
   function setJoinStatus(text) {
     S.joinStatus = text;
     const el = $('join-status');
-    if (el) el.innerHTML = `<strong>${esc(text)}</strong>`;
+    if (el) { el.innerHTML = `<strong>${esc(text)}</strong>`; el.hidden = !text; }
   }
 
   function work() {
@@ -495,6 +512,14 @@
     S.selected = row.dataset.id;
     if (S.joining) S.joinStatus = '';
     render();
+  });
+  $('start').addEventListener('click', async (ev) => {
+    const button = ev.target.closest('button[data-copy]');
+    if (!button) return;
+    const code = $(button.dataset.copy);
+    try { await navigator.clipboard.writeText(code.textContent); button.textContent = 'Copied'; }
+    catch { getSelection().selectAllChildren(code); button.textContent = 'Selected'; }
+    setTimeout(() => (button.textContent = 'Copy'), 2000);
   });
   $('detail').addEventListener('click', async (ev) => {
     const tab = ev.target.closest('[data-tab]');
