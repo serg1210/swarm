@@ -198,7 +198,13 @@ const STAGES = [
  */
 export function jobProgress(log) {
   const lines = String(log || '').split('\n').filter((l) => l.trim());
-  const failed = lines.findLast((l) => /^\s*✗ /.test(l))?.replace(/^\s*✗\s*/, '') || null;
+  const claimed = lines.findLastIndex((l) => /Claiming /.test(l));
+  const failed = lines.slice(Math.max(claimed, 0)).findLast((l) => /^\s*✗ /.test(l))?.replace(/^\s*✗\s*/, '') || null;
+  // A run reviews someone else's submission before claiming; its check lines are not this task's.
+  const reviewing = lines.findLastIndex((l) => /Reviewing \S+ from worker/.test(l));
+  if (reviewing > Math.max(claimed, lines.findLastIndex((l) => /Session\W/.test(l)))) {
+    return { step: 3, now: `Reviewing ${/Reviewing (\S+)/.exec(lines[reviewing])[1]} for another agent`, done: false };
+  }
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     for (const [re, step, now, done] of STAGES) {

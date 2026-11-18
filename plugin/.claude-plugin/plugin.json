@@ -1,7 +1,7 @@
 {
   "name": "swarm",
   "displayName": "Swarm",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Install, choose an open-source project, and your leftover Claude quota is spent doing tasks its maintainers wrote. Checks run before a pull request is opened; works on your computer and in cloud sessions.",
   "author": {
     "name": "Swarm contributors",
