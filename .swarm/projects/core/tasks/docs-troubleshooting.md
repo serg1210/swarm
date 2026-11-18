@@ -9,7 +9,8 @@ verify: ["node --test .swarm/projects/core/tasks/docs-troubleshooting.test.mjs"]
 When a run stops, the volunteer sees one line. Write `docs/TROUBLESHOOTING.md`: for each message
 below, what it means and what to do, found by reading the code that prints it.
 
-Cover at least these, quoting the message text in backticks exactly as the code prints it:
+Cover at least these. Quote the fixed part of each message in backticks, exactly as written
+here (the code adds a task name or other detail around some of them):
 
 - `No sandbox available`
 - `bubblewrap is installed but cannot build a sandbox`

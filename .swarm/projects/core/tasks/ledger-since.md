@@ -17,7 +17,8 @@ and wire it into `swarm ledger`.
   - Receipts are compared by their `ts` field. With either bound set, a receipt whose `ts` is
     missing or unparseable is left out. With no bounds, everything is returned.
   - A bound that is not a valid date throws a `RangeError` whose message contains the value given.
-  - The input array is not modified, and order is kept.
+  - The input array is not modified, and order is kept. A `since` later than `until` gives an
+    empty list.
 - `swarm ledger --since <date> [--until <date>]` applies it before the board is built, for every
   output form the command already has.
 - Add unit tests under `test/`.

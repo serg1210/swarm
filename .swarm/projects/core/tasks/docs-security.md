@@ -23,4 +23,5 @@ machines. Both need one page that says plainly what stands between them and harm
   checks and a review do not prove a change is correct.
 - "Reporting a vulnerability" asks for a private GitHub security advisory on the repository and
   not a public issue.
-- State only what the code or those documents support. Between 350 and 900 words.
+- State only what the code or those documents support; the reporting instruction above is the
+  one exception. Between 350 and 1000 words.

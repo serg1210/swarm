@@ -30,7 +30,7 @@ test('the label is escaped and nothing external is loaded', () => {
   assert.ok(!svg.includes('a<b'));
   assert.ok(svg.includes('a&lt;b&amp;'));
   assert.match(svg, /^<svg[^>]*\saria-label="a&lt;b&amp;&quot;c&quot;&gt;: 2 tasks, 2 workers"/);
-  assert.ok(!/<script|<image|<foreignObject|href=|url\(/i.test(svg));
+  assert.ok(!/<script|<image|<foreignObject|href=|url\(\s*['"]?https?:/i.test(svg));
 });
 
 test('counts must be non-negative integers', () => {

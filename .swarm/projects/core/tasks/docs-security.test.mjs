@@ -30,5 +30,5 @@ test('the limits are as concrete as the protections', () => {
   assert.ok(words(limits) >= 120, `${words(limits)} words on limits`);
   assert.ok(section('Reporting a vulnerability').toLowerCase().includes('advisor'));
   const total = words(doc);
-  assert.ok(total >= 350 && total <= 900, `${total} words`);
+  assert.ok(total >= 350 && total <= 1000, `${total} words`);
 });

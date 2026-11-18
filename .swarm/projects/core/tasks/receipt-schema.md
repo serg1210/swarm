@@ -14,7 +14,7 @@ under `.swarm/receipts/`.
 
 - `docs/receipt.schema.json` is a JSON Schema (draft 2020-12) for an object, with a `title` and a
   `description`.
-- `required` lists every field a receipt always carries, including `v`, `kind`, `project`,
+- `required` lists only fields that are present in every merged receipt, and includes `v`, `kind`, `project`,
   `task`, `base`, `work`, `tree`, `diffSha256`, `agent`, `usage`, `verify`, `ts`, `signer` and `sig`.
 - `properties` describes every top-level field that appears in any merged receipt. Every
   property, at the top level and inside `agent`, `usage` and `signer`, has a `type` and a

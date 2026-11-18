@@ -14,7 +14,9 @@ letting their agent use them.
 
 - Sections, with these exact headings: `## Setup`, `## Delegate mode`, `## Connector mode`,
   `## What the file tools refuse`.
-- Every tool in the `TOOLS` list of `src/mcp.mjs` appears under the mode it belongs to, with its
+- Every tool in the `TOOLS` list of `src/mcp.mjs` appears under the mode it belongs to (tools
+  that belong to neither, such as status, choosing a project, listing tasks and job status, go
+  under Setup), with its
   name in backticks, what it does in one or two sentences, and its required arguments.
 - Take every statement from the code (`src/mcp.mjs`, `src/session.mjs`) or from
   `docs/INSTALL.md`. Do not describe behaviour you did not find there.

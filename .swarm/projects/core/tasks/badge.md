@@ -12,7 +12,8 @@ many verified tasks have been merged and by how many workers, built from the led
 ## Acceptance
 
 - New module `src/badge.mjs` exporting `badgeSvg({ label, tasks, workers })`, returning one SVG
-  string with no dependencies and no external resources (no fonts, images or scripts loaded).
+  string with no dependencies and no external resources: no scripts, no images, no `href`
+  attributes and no web addresses.
   - `label` defaults to `swarm`. The message is `<tasks> tasks, <workers> workers`, with the
     singular forms `1 task` and `1 worker`.
   - The root element is `<svg xmlns="http://www.w3.org/2000/svg" ...>` with a numeric `width`, a

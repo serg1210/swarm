@@ -18,7 +18,7 @@ rendering of the board that `leaderboard()` in `src/ledger.mjs` returns.
     - Totals: `4 verified tasks from 2 workers, $1.75 API-equivalent quota donated.` with the
       singular forms `1 verified task` and `1 worker`.
     - Header `| Worker | Tasks | Donated | Agents |` and separator `| --- | ---: | ---: | --- |`.
-    - One row per worker, in the order given: handle, task count, cost with two decimals, and the
+    - One row per worker, in the order given: handle, task count, cost as dollars with two decimals (`$1.50`), and the
       runners joined with `, ` (a single `-` when there are none).
     - A `|` in a handle is written `\|`, and a handle that is missing or empty is shown as the
       worker id.

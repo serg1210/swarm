@@ -14,9 +14,10 @@ writes into `.swarm` itself.
 
 - New module `src/task-template.mjs` exporting `taskTemplate({ title, size, paths, verify })`,
   returning the text of a task file: frontmatter, then a body with the headings `## Goal` and
-  `## Acceptance`, each followed by a one-line placeholder.
-  - `title` is required and is trimmed. An empty title, or one containing a line break, throws a
-    `TypeError`.
+  `## Acceptance`, each followed on the very next line (no blank line between) by a one-line
+  placeholder.
+  - `title` is required and is trimmed first. A title that is then empty, or contains a line
+    break, throws a `TypeError`. Write it so that it reads back as a string whatever it contains.
   - `size` defaults to `S` and must be `S`, `M` or `L`; anything else throws a `RangeError`.
   - `paths` defaults to an empty array and is written as a JSON array on one line.
   - `verify` is a list of commands, written the same way, and the key is left out when the list is
