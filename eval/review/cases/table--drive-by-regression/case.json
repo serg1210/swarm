@@ -1,0 +1,7 @@
+{
+  "task": "table",
+  "kind": "bad",
+  "plant": "a one-character regression in a file the task has nothing to do with",
+  "answer": "The diff also edits src/slug.mjs, which the task does not mention, and drops the regex's g flag, so slugify now replaces only the first separator.",
+  "key": "slug"
+}

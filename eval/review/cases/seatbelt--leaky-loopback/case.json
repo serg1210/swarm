@@ -1,0 +1,7 @@
+{
+  "task": "seatbelt",
+  "kind": "bad",
+  "plant": "a sandbox rule meant for loopback also allows connections to any address (a real miss from this repository)",
+  "answer": "The rule (allow network* (local ip \"localhost:*\")) filters on the local end of the socket only, so it also allows outbound connections to any remote address and the network is not cut off.",
+  "key": "(connect|connection|reach|talk)\\w* (out )?(to )?(any|another|other|arbitrary|external|remote|outside)|any (remote |other |external |outside )?(address|host|machine|destination|server)|arbitrary (address|host|remote|destination)|the internet|not (actually )?(cut|block|isolat)|leak"
+}

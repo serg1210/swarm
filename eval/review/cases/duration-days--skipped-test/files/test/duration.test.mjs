@@ -21,5 +21,6 @@ test('days', () => {
 
 test('an unknown unit throws and names the unit', () => {
   assert.throws(() => parseDuration('5x'), /"x"/);
+  assert.throws(() => parseDuration('5ms'), /"ms"/);
   assert.throws(() => parseDuration('1h5q'), /"q"/);
 });

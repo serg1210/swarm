@@ -1,0 +1,7 @@
+{
+  "task": "table",
+  "kind": "bad",
+  "plant": "numbers are sorted as strings, and the snapshot records the wrong order",
+  "answer": "Sorting compares every value as a string, so numbers come out as 1000, 12, 120, 75, 8; the unit test only uses single digits and the snapshot file records the wrong order.",
+  "key": "numeric|lexicograph|as (a )?strings?|string (comparison|order|sort)|localeCompare|1000"
+}

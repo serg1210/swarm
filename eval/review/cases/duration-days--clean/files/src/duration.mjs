@@ -5,7 +5,7 @@ export function parseDuration(text) {
   const input = String(text).trim();
   if (/^\d+$/.test(input)) return Number(input);
   let total = 0;
-  for (const [, n, unit] of input.matchAll(/(\d+)([a-z])/g)) {
+  for (const [, n, unit] of input.matchAll(/(\d+)([a-z]+)/g)) {
     if (!Object.hasOwn(UNITS, unit)) throw new Error(`Unknown duration unit "${unit}" in "${input}"`);
     total += Number(n) * UNITS[unit];
   }

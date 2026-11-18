@@ -1,0 +1,7 @@
+item     qty   price
+-------  ----  -----
+washer   1000   0.05
+bracket    12      3
+bolt      120   0.25
+nut        75    0.1
+anchor      8    1.5

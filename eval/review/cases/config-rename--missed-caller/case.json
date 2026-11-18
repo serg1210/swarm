@@ -1,0 +1,7 @@
+{
+  "task": "config-rename",
+  "kind": "bad",
+  "plant": "a caller outside the diff still reads the old name",
+  "answer": "src/banner.mjs was not updated and still reads `width` from loadConfig, which is now undefined by default, so banner() no longer centres text unless the caller passes width.",
+  "key": "banner"
+}

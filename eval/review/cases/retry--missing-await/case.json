@@ -1,0 +1,7 @@
+{
+  "task": "retry",
+  "kind": "bad",
+  "plant": "asynchronous failures are never retried",
+  "answer": "fn's result is returned without await, so a promise that rejects leaves the try block uncaught and is never retried; the tests only fail synchronously.",
+  "key": "\\bawait\\b|(never|not|n't) (be )?retr|without retr"
+}

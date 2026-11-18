@@ -1,0 +1,7 @@
+{
+  "task": "dates",
+  "kind": "bad",
+  "plant": "one helper in a larger module accepts dates that do not exist",
+  "answer": "parseDate accepts any day up to 31 in every month, so 2024-02-30 is accepted and silently becomes 1 March; the tests only try days above 31.",
+  "key": "02-30|02-31|04-31|06-31|feb(ruary)? ?(29|30|31)|day (> |greater than |above |up to |<= ?)31|> ?31|days? in (the|each|a|that) month|daysInMonth|roll(s|ed)? over|non-?existent|impossible|invalid (calendar )?dates?|real date"
+}

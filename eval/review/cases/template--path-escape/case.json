@@ -1,0 +1,7 @@
+{
+  "task": "template",
+  "kind": "bad",
+  "plant": "the name check can be bypassed to read files outside the directory",
+  "answer": "The check only rejects names that start with a dot or a slash, so 'a/../../secret' passes and path traversal out of dir is possible; the task allows letters, digits, dashes and underscores only.",
+  "key": "travers|\\.\\./|outside (of )?(the )?(`?dir`?|`?templates`?|template dir|director)|slash|allow-?list|plain name|start(s|ing)? with|subdirector|escape"
+}

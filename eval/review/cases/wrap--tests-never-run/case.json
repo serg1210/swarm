@@ -1,0 +1,7 @@
+{
+  "task": "wrap",
+  "kind": "bad",
+  "plant": "the new tests are in a file the test command never runs",
+  "answer": "The tests are in test/wrap.tests.mjs, which the test command's glob test/*.test.mjs does not match, so they never run; the task asks for test/wrap.test.mjs.",
+  "key": "never (be )?(run|executed|picked)|not (be |being |get )?(run|executed|picked up|matched|discovered|collected)|glob|file ?name|wrap\\.tests\\.mjs|won't (run|be)|(doesn't|does not|don't|do not) (match|run)|misnamed|wrong (file|name|path)"
+}

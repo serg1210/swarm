@@ -1,0 +1,7 @@
+{
+  "task": "setpath",
+  "kind": "bad",
+  "plant": "the prototype guard checks only the first segment",
+  "answer": "Only the first segment is compared with the forbidden names, so 'a.__proto__.x' still writes to Object.prototype; the task says anywhere in the path, and the tests only try forbidden names in first position.",
+  "key": "first segment|parts\\[0\\]|only (checks|the first|validates|guards)|nested|anywhere|a\\.__proto__|later segment|deeper|subsequent|not (the )?(rest|other|later|remaining)|first (position|part|element|component)"
+}

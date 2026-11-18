@@ -169,10 +169,13 @@ are not lending capacity to other people: nobody can send your agent a task of t
 Passing tests and one review do not prove a change is correct. They are what the merging agent
 goes on, and what a maintainer can look at afterwards.
 
-The reviewing agent is itself tested: [eval/review](eval/review) gives it changes with planted
-problems that pass every check, next to clean ones. On the current set it rejects all nine planted
-problems and approves all four clean changes. The set is small and its problems are plain, so this
-is a floor and not a measure of how well it reviews hard changes.
+The reviewing agent is itself tested: [eval/review](eval/review) gives it 20 changes with a planted
+problem that passes every check, next to 13 clean ones. With Sonnet reviewing, every planted problem
+was rejected and every clean change approved. The one case taken from a real miss in this
+repository, the macOS sandbox rule that let network through, was rejected every time but for the
+right reason only about half the time, and the smaller Haiku model approved it once in seven runs.
+So the reviewer catches plain cheating reliably and should not be trusted alone on changes to the
+sandbox, which is one reason those need two approvals and have their own tests.
 
 ## The two launch projects
 

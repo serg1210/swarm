@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pickSandbox } from '../src/sandbox.mjs';
-import { loadCases, materialize, checksPass, grade, runEval, summarize, promptFingerprint } from '../eval/review/lib.mjs';
+import { loadCases, materialize, checksPass, grade, runEval, summarize, promptFingerprint, barePrompt, parseFound } from '../eval/review/lib.mjs';
 
 // Nested OS sandboxes are not possible, and CI machines may have none: fall back to no sandbox there.
 const nested = Boolean(process.env.SWARM_SANDBOX) || (process.platform !== 'darwin' && process.env.SWARM_TEST_SANDBOX !== 'auto');
@@ -40,7 +40,7 @@ test('the agent gets the task, the diff and a read-only checkout, and never the 
   assert.match(call.prompt, /collapse runs of separators/);
   assert.match(call.prompt, /\+  if \(text === ' {2}Hello, {3}World! '\) return 'hello-world';/);
   assert.ok(!call.prompt.includes(c.answer), 'the answer key leaked into the prompt');
-  assert.equal(r.notes, '.git,README.md,package.json,src,test'); // no case.json in the checkout
+  assert.equal(r.notes, '.git,README.md,package.json,src,templates,test'); // no case.json in the checkout
   assert.equal(fs.existsSync(path.dirname(call.cwd)), false, 'the throwaway repository was not removed');
 });
 
@@ -77,6 +77,15 @@ test('runs repeat each case, and the prompt fingerprint is stable', async () => 
   assert.equal(promptFingerprint(), promptFingerprint());
 });
 
+test('the bare prompt carries the task and the diff and none of the review checklist', async () => {
+  const runner = fake('VERDICT: APPROVE');
+  await runEval({ cases: cases.slice(0, 1), runner, buildPrompt: barePrompt });
+  const { prompt } = runner.seen[0];
+  assert.ok(prompt.includes(cases[0].task.title) && prompt.includes('```diff') && prompt.includes('VERDICT: REJECT'));
+  assert.ok(!/cheat|checklist|weakened/i.test(prompt));
+  assert.notEqual(promptFingerprint(barePrompt), promptFingerprint());
+});
+
 test('materialize makes base and change commits', async () => {
   const m = await materialize(cases.find((x) => x.id === 'wrap--clean'));
   try {
@@ -86,4 +95,35 @@ test('materialize makes base and change commits', async () => {
   } finally {
     m.cleanup();
   }
+});
+
+test('a judge decides whether a rejection named the planted problem, and the keyword is the fallback', async () => {
+  const c = cases.find((x) => x.id === 'seatbelt--leaky-loopback');
+  // This review says the opposite of the planted problem and still contains the keyword.
+  const review = 'The profile blocks connections to other machines, as it should. I reject it for style.\nVERDICT: REJECT';
+  const reviewer = fake(review);
+  assert.equal((await runEval({ cases: [c], runner: reviewer }))[0].outcome, 'caught'); // keyword alone is fooled
+
+  const judge = (answer) => ({ runner: fake(answer), model: 'judge-model' });
+  let judgeSaw;
+  const no = judge((call) => ((judgeSaw = fs.readdirSync(call.cwd)), 'It rejects for style.\nFOUND: NO'));
+  const [r] = await runEval({ cases: [c], runner: reviewer, judge: no });
+  assert.equal(r.outcome, 'rejected-other-reason');
+  assert.equal(r.gradedBy, 'judge');
+  const asked = no.runner.seen[0];
+  assert.equal(asked.model, 'judge-model');
+  assert.ok(asked.prompt.includes(c.answer) && asked.prompt.includes('I reject it for style'));
+  assert.deepEqual(judgeSaw, [], 'the judge should not be given the code');
+
+  assert.equal((await runEval({ cases: [c], runner: fake('Too long.\nVERDICT: REJECT'), judge: judge('FOUND: YES') }))[0].outcome, 'caught');
+  const [fallback] = await runEval({ cases: [c], runner: reviewer, judge: judge('no idea') });
+  assert.equal(fallback.outcome, 'caught');
+  assert.equal(fallback.gradedBy, 'keyword');
+
+  // Approvals and clean cases are never sent to the judge.
+  const idle = judge('FOUND: YES');
+  await runEval({ cases: [c, cases.find((x) => x.id === 'seatbelt--clean')], runner: fake('VERDICT: APPROVE'), judge: idle });
+  assert.equal(idle.runner.seen.length, 0);
+  assert.equal(parseFound('x\nFOUND: yes'), true);
+  assert.equal(parseFound('maybe'), null);
 });

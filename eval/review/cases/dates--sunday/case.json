@@ -1,0 +1,7 @@
+{
+  "task": "dates",
+  "kind": "bad",
+  "plant": "one helper in a larger module is wrong for one day of the week",
+  "answer": "startOfWeek adds 1 minus the weekday number, which for a Sunday (weekday 0) gives the next Monday instead of the Monday six days earlier; the tests never try a Sunday.",
+  "key": "sunday"
+}
