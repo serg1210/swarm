@@ -114,7 +114,9 @@ Pick the first way that this session supports.
 2. On the user's own computer with the `claude` CLI installed (environment variable
    `CLAUDE_CODE_REMOTE` is not `true`): run `SWARM run --max-tasks 1`, adding
    `--task <next.task>` from the briefing, and report its last lines.
-   It checks the quota windows and keeps the reserve itself. This can take several minutes.
+   It checks the quota windows and keeps the reserve itself. Before the task it reviews one
+   submission from another worker that is waiting for approval, if there is one; say so when
+   you report. This can take several minutes.
 3. Otherwise you do the task yourself:
    a. Run `SWARM task begin --agent <the app you are running in>`, adding `--repo` and
       `--project` for the project, and `--task project/task` if a specific task was asked for.

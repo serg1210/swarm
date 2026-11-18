@@ -47,6 +47,7 @@ test.before(() => {
   write(path.join(seed, '.swarm/projects/demo/tasks/add-farewell.md'), '---\ntitle: Add a farewell module\nsize: S\n---\nCreate src/bye.mjs.\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-thanks.md'), '---\ntitle: Add a thanks module\nsize: S\n---\nCreate src/thanks.mjs.\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-hello.md'), '---\ntitle: Add a hello module\nsize: S\n---\nCreate src/hello.mjs.\n');
+  write(path.join(seed, '.swarm/projects/demo/tasks/add-wave.md'), '---\ntitle: Add a wave module\nsize: S\n---\nCreate src/wave.mjs.\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/change-rule.md'), '---\ntitle: Change a rule file\nsize: S\n---\nCreate src/rule.mjs.\n');
   write(path.join(seed, 'check.mjs'), "import fs from 'node:fs';\nfor (const f of fs.readdirSync('src')) { const m = await import('./src/' + f); if (typeof Object.values(m)[0] !== 'function') process.exit(1); }\n");
   write(path.join(seed, 'src/index.mjs'), 'export const main = () => 1;\n');
@@ -243,4 +244,17 @@ test('a rejected submission is closed, the task opens again, and after too many 
   assert.match(maintain('carol', 'APPROVE').out, /Merged demo\/add-hello/);
   assert.deepEqual(refs('refs/swarm/rejected'), []);
   assert.equal(state(), 'done');
+});
+
+test('a run reviews one waiting submission from someone else before taking a task', () => {
+  assert.match(run('alice', 'demo/add-wave', "echo 'export const wave = () => 1;' > src/wave.mjs").out, /Submitted demo\/add-wave/);
+  const donate = (home) => swarm(home, ['run', '--repo', remote, '--runner', 'mock', ...SANDBOX], { SWARM_MOCK_CMD: 'printf "Fine.\\nVERDICT: APPROVE\\n"' });
+
+  // Bob steps over the forged submission, which costs nothing, and reviews Alice's.
+  const bob = donate('bob');
+  assert.match(bob.out, /Reviewing demo\/add-wave .*Review posted: approve/s, bob.out);
+  assert.match(bob.out, /1 reviewed, /);
+  // Once is enough: his next run does not read it again, and Alice never reviews her own.
+  assert.doesNotMatch(donate('bob').out, /Reviewing demo\/add-wave/);
+  assert.doesNotMatch(donate('alice').out, /Reviewing demo\/add-wave/);
 });

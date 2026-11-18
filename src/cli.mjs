@@ -35,7 +35,7 @@ ${c.bold('Volunteer')}
   swarm projects                                 list projects that opted in to Swarm
   swarm choose <repo>[#project]                  pick a project to donate to (--remove to drop it)
   swarm tasks [--repo <repo>]                    list tasks and their state
-  swarm run [--task <project/task>] [options]    work on a task and submit it
+  swarm run [--task <project/task>] [options]    review one waiting submission, then work on a task and submit it
   swarm review [--task <project/task>]           independently verify someone else's submission
   swarm history [--json]                         show what you have donated so far
   swarm mcp                                    run as an MCP connector (Claude Code, Cowork, Codex, Hermes)
@@ -445,7 +445,7 @@ const commands = {
     if (!args['dry-run']) await flushOutbox({ identity: ctx.identity });
 
     const maxTasks = Number(args['max-tasks'] ?? 1);
-    const total = { submitted: 0, failed: 0, held: 0, costUsd: 0 };
+    const total = { submitted: 0, failed: 0, held: 0, reviewed: 0, costUsd: 0 };
     // Spread work over the chosen projects: start somewhere random, then go round.
     const list = targets(args, ctx.config);
     const start = Math.floor(Math.random() * list.length);
@@ -458,6 +458,16 @@ const commands = {
       if (!access.ok) {
         warn(`Cannot submit from here: ${access.reason}. No task was started and no quota was spent on one.`);
         continue;
+      }
+      // Every merge waits for another worker's review, and only runs like this one produce them,
+      // so a run first reviews one waiting submission.
+      for (const sub of await here.board.submissions()) {
+        const project = here.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
+        if (sub.mine || !project || (target.project && project.id !== target.project) || (await alreadyReviewed(here, sub))) continue;
+        const res = await reviewSubmission({ ...here, runner, sub, opts: await runOptions(args, here.config, project) }).catch((err) => (warn(`Review of ${sub.taskRef} failed: ${err.message.split('\n')[0]}`), { status: 'error' }));
+        total.costUsd += res.usage?.costUsd || 0;
+        if (res.status === 'reviewed' || res.status === 'dry-run') total.reviewed++;
+        if (res.status !== 'invalid') break; // an invalid one cost nothing; anything else spent quota
       }
       while (total.submitted + total.failed + total.held < maxTasks) {
         const claims = await here.board.claims(here.mirror.projects);
@@ -487,7 +497,7 @@ const commands = {
         }
       }
     }
-    log(`\n${c.bold('Session')}: ${total.submitted} submitted, ${total.held ? `${total.held} kept for the next run, ` : ''}${total.failed} failed, ${fmtUsd(total.costUsd)} API-equivalent quota used.`);
+    log(`\n${c.bold('Session')}: ${total.reviewed ? `${total.reviewed} reviewed, ` : ''}${total.submitted} submitted, ${total.held ? `${total.held} kept for the next run, ` : ''}${total.failed} failed, ${fmtUsd(total.costUsd)} API-equivalent quota used.`);
   },
 
   async history(args) {

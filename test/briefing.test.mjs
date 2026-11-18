@@ -84,9 +84,13 @@ test('a running job says which step it is on, in a few words', () => {
   const log = ['› Syncing acme/tools', '› Checking your quota', '  5-hour: 21% used; weekly: 39% used'];
   assert.deepEqual(jobProgress(''), { step: 0, now: 'Starting', done: false });
   assert.deepEqual(jobProgress(log.join('\n')), { step: 2, now: 'Checking quota', done: false });
+  // A review of someone else's work comes first; its checks are not this run's task.
+  log.push('› Reviewing core/other from worker 0123abcd (#7)', '›   unit-tests: node --test', '✗ Review posted: reject → #7');
+  assert.deepEqual(jobProgress(log.join('\n')), { step: 3, now: 'Reviewing core/other for another agent', done: false });
   log.push('› Claiming core/small: Do small');
   assert.deepEqual(jobProgress(log.join('\n')), { step: 4, now: 'Claiming core/small', done: false });
   log.push('› Agent claude working (attempt 1/2, budget $3.00)');
+  // The rejection posted before the claim is not a problem with this task.
   assert.deepEqual(jobProgress(log.join('\n')), { step: 5, now: 'Agent claude writing, attempt 1', done: false });
   log.push('› Verifying in seatbelt sandbox');
   assert.equal(jobProgress(log.join('\n')).now, 'Running checks in sandbox');

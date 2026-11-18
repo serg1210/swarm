@@ -61,7 +61,9 @@ close them, and the ledger is the set of merged receipts.
 
 ## Who merges
 
-No person has to. `swarm maintain` is the maintainer's pass, meant for an agent on a schedule:
+No person has to. Every `swarm run` first reviews one submission from another worker that is
+waiting for approval, so the volunteers who submit also supply the reviews merging needs.
+`swarm maintain` is the maintainer's pass, meant for an agent on a schedule:
 for each open submission it re-checks structure, signature and policy, reproduces the verify
 steps in the sandbox, reviews it with the agent CLI if it came from another worker, and merges it
 when the project's quorum of independent approvals is met and nobody rejected it. A worker's
