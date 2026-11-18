@@ -1,0 +1,10 @@
+{
+  "id": "outreach-email",
+  "name": "Maintainer outreach email",
+  "purpose": "A first email to the maintainer of an open-source project, asking whether they would list tasks for Swarm.",
+  "minWords": 110,
+  "maxWords": 220,
+  "requiredHeadings": [
+    "Subject"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "objections",
+  "name": "Objections page",
+  "purpose": "Answers the hardest objections a sceptical developer raises, without dodging any of them.",
+  "minWords": 300,
+  "maxWords": 800,
+  "requiredHeadings": [],
+  "minQuestions": 6
+}

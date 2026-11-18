@@ -1,0 +1,8 @@
+{
+  "id": "blurb",
+  "name": "Newsletter blurb",
+  "purpose": "A short paragraph an editor can paste into a developer newsletter unchanged.",
+  "minWords": 60,
+  "maxWords": 120,
+  "requiredHeadings": []
+}

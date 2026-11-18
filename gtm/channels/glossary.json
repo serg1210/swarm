@@ -1,0 +1,14 @@
+{
+  "id": "glossary",
+  "name": "Glossary",
+  "purpose": "Defines the words Swarm uses, one short entry each, for someone reading a receipt or a pull request for the first time.",
+  "minWords": 180,
+  "maxWords": 450,
+  "requiredHeadings": [
+    "Task",
+    "Claim",
+    "Receipt",
+    "Review",
+    "Ledger"
+  ]
+}
