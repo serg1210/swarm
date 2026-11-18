@@ -41,11 +41,12 @@ test.before(() => {
   const seed = path.join(tmp, 'seed');
   write(
     path.join(seed, '.swarm/projects/demo/project.json'),
-    JSON.stringify({ name: 'Demo', paths: ['src/**'], protect: ['check.mjs'], verify: [{ name: 'check', run: 'node check.mjs' }], review: { quorum: 1, tiers: [{ paths: ['src/rule.mjs'], quorum: 2 }] } }),
+    JSON.stringify({ name: 'Demo', paths: ['src/**'], protect: ['check.mjs'], verify: [{ name: 'check', run: 'node check.mjs' }], review: { quorum: 1, maxRejections: 2, tiers: [{ paths: ['src/rule.mjs'], quorum: 2 }] } }),
   );
   write(path.join(seed, '.swarm/projects/demo/tasks/add-greeting.md'), '---\ntitle: Add a greeting module\nsize: S\n---\nCreate src/greet.mjs exporting greet(name).\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-farewell.md'), '---\ntitle: Add a farewell module\nsize: S\n---\nCreate src/bye.mjs.\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/add-thanks.md'), '---\ntitle: Add a thanks module\nsize: S\n---\nCreate src/thanks.mjs.\n');
+  write(path.join(seed, '.swarm/projects/demo/tasks/add-hello.md'), '---\ntitle: Add a hello module\nsize: S\n---\nCreate src/hello.mjs.\n');
   write(path.join(seed, '.swarm/projects/demo/tasks/change-rule.md'), '---\ntitle: Change a rule file\nsize: S\n---\nCreate src/rule.mjs.\n');
   write(path.join(seed, 'check.mjs'), "import fs from 'node:fs';\nfor (const f of fs.readdirSync('src')) { const m = await import('./src/' + f); if (typeof Object.values(m)[0] !== 'function') process.exit(1); }\n");
   write(path.join(seed, 'src/index.mjs'), 'export const main = () => 1;\n');
@@ -186,4 +187,56 @@ test('a change to a rule file needs two different approving agents', () => {
   assert.match(second.out, /Review posted: approve/, second.out);
   assert.match(second.out, /Merged demo\/change-rule/);
   assert.match(sh('git', ['ls-tree', '-r', '--name-only', 'main'], remote), /src\/rule\.mjs/);
+});
+
+test('a rejected submission is closed, the task opens again, and after too many it is parked', () => {
+  const HELLO = "echo 'export const hello = () => 1;' > src/hello.mjs";
+  const refs = (prefix) => sh('git', ['for-each-ref', '--format=%(refname)', prefix], remote).split('\n').filter(Boolean);
+  const state = () => JSON.parse(swarm('alice', ['tasks', '--repo', remote, '--json']).stdout).find((t) => t.ref === 'demo/add-hello').state;
+  const maintain = (home, verdict) => swarm(home, ['maintain', '--repo', remote, '--runner', 'mock', ...SANDBOX], { SWARM_MOCK_CMD: `printf "Reasons.\\nVERDICT: ${verdict}\\n"` });
+
+  assert.match(run('alice', 'demo/add-hello', HELLO).out, /Submitted demo\/add-hello/);
+  assert.equal(state(), 'claimed');
+
+  // The submitter's own pass has nobody's rejection to act on.
+  assert.doesNotMatch(maintain('alice', 'REJECT').out, /Closed demo\/add-hello/);
+
+  // Another worker's agent rejects it: the submission goes away and the task is open again.
+  const first = maintain('bob', 'REJECT');
+  assert.match(first.out, /Review posted: reject/, first.out);
+  assert.match(first.out, /Closed demo\/add-hello .*rejected in review\. The task is open for another attempt/);
+  assert.match(first.out, /1 closed after rejection/);
+  assert.deepEqual(refs('refs/heads/swarm/demo/add-hello'), []);
+  assert.deepEqual(refs('refs/swarm/reviews/demo/add-hello'), []);
+  assert.equal(refs('refs/swarm/rejected/demo/add-hello').length, 1);
+  assert.equal(state(), 'open');
+
+  // The next worker's agent is told that review is where the last attempt ended.
+  const TOLD = `printf '%s' "$SWARM_PROMPT" | grep -q 'did not get past: review (1x)' && ${HELLO}`;
+  assert.match(run('carol', 'demo/add-hello', TOLD).out, /Submitted demo\/add-hello/);
+
+  // A second rejection reaches this project's limit of two: the task is parked.
+  const second = maintain('bob', 'REJECT');
+  assert.match(second.out, /Closed demo\/add-hello .*That is 2 rejections, so the task is parked.*swarm reopen demo\/add-hello/, second.out);
+  assert.equal(state(), 'stuck');
+  assert.match(run('alice', 'demo/add-hello', HELLO).out, /is not open/);
+  assert.match(swarm('alice', ['tasks', '--repo', remote]).out, /stuck +demo\/add-hello[\s\S]*swarm reopen/);
+
+  // A maintainer reopens it. This time the change passes on the worker's machine and fails on the
+  // reviewer's, so no agent is asked: that rejection closes the submission just the same.
+  assert.match(swarm('bob', ['reopen', 'demo/add-hello', '--repo', remote]).out, /Reopened demo\/add-hello/);
+  const HERE_ONLY = "echo 'export const hello = import.meta.url.includes(\"/review-\") ? 1 : () => 1;' > src/hello.mjs";
+  assert.match(run('alice', 'demo/add-hello', HERE_ONLY).out, /Submitted demo\/add-hello/);
+  const third = maintain('bob', 'APPROVE');
+  assert.match(third.out, /Review posted: reject/, third.out);
+  assert.match(third.out, /Closed demo\/add-hello .*The task is open for another attempt/);
+  assert.equal(state(), 'open');
+
+  // A maintainer reopens it; the next submission is approved and merged, and no record is left behind.
+  assert.match(swarm('bob', ['reopen', 'demo/add-hello', '--repo', remote]).out, /Reopened demo\/add-hello/);
+  assert.equal(state(), 'open');
+  assert.match(run('alice', 'demo/add-hello', HELLO).out, /Submitted demo\/add-hello/);
+  assert.match(maintain('carol', 'APPROVE').out, /Merged demo\/add-hello/);
+  assert.deepEqual(refs('refs/swarm/rejected'), []);
+  assert.equal(state(), 'done');
 });

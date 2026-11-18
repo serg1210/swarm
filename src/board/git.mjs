@@ -4,17 +4,22 @@
 //                                                          so exactly one worker wins
 //   submissions  refs/heads/swarm/<project>/<task>/<worker>
 //   reviews      refs/swarm/reviews/<project>/<task>/<submitter>/<reviewer>
+//   rejections   refs/swarm/rejected/<project>/<task>/<work commit>   one per submission that was
+//                                                          rejected in review and withdrawn
 //
-// Claims and reviews are commits on the empty tree whose message is a JSON document.
+// Claims, reviews and rejections are commits on the empty tree whose message is a JSON document.
+// Everyone who can write these refs has push access, so there is nobody less trusted to filter out.
 import { run } from '../util.mjs';
 import { git } from '../verify.mjs';
 
 const CLAIMS = 'refs/swarm/claims';
 const REVIEWS = 'refs/swarm/reviews';
+const REJECTED = 'refs/swarm/rejected';
 
 export class GitBoard {
   kind = 'git';
   unpublished = new Set(); // every task file is claimable; there is nothing to publish first
+  rejected = new Map(); // task ref -> submissions rejected in review since it was last reopened
 
   constructor({ mirror, identity }) {
     this.mirror = mirror;
@@ -43,8 +48,10 @@ export class GitBoard {
     return docs;
   }
 
-  /** Map of task ref -> live claims. */
+  /** Map of task ref -> live claims. Also counts the rejected submissions per task. */
   async claims() {
+    this.rejected = new Map();
+    for (const { doc } of await this.#readDocs(REJECTED)) this.rejected.set(doc.task, (this.rejected.get(doc.task) || 0) + 1);
     const live = new Map();
     for (const { ref, sha, doc } of await this.#readDocs(CLAIMS)) {
       if (new Date(doc.exp) < new Date()) continue;
@@ -85,6 +92,12 @@ export class GitBoard {
       timeoutMs: 60_000,
     });
     return res.code === 0 ? { ok: true, route: 'direct' } : { ok: false, reason: `the project's git remote refused a push (${(res.stderr || '').trim().split('\n')[0] || 'no reason given'})` };
+  }
+
+  /** Tells the next worker's agent that earlier submissions did not get through review. */
+  hints(taskRef) {
+    const n = this.rejected.get(taskRef);
+    return { failures: n ? { review: n } : {} };
   }
 
   branchFor(task) {
@@ -128,6 +141,39 @@ export class GitBoard {
     return (await this.#readDocs(REVIEWS)).filter((d) => d.ref.startsWith(prefix)).map((d) => d.doc);
   }
 
+  /** Deletions, as push refspecs, for a submission's branch and the reviews of it. */
+  async #submissionRefs(sub) {
+    const stale = [`:refs/heads/${sub.id}`];
+    const reviews = await git(this.mirror.dir, ['ls-remote', 'origin', `${REVIEWS}/${sub.taskRef}/${sub.worker}/*`]);
+    for (const line of reviews.split('\n').filter(Boolean)) stale.push(`:${line.split('\t')[1]}`);
+    return stale;
+  }
+
+  async #rejectionRefs(taskRef) {
+    const out = await git(this.mirror.dir, ['ls-remote', 'origin', `${REJECTED}/${taskRef}/*`]);
+    return out.split('\n').filter(Boolean).map((line) => line.split('\t')[1]);
+  }
+
+  /**
+   * Remove a submission that was rejected in review, so its task is offered again, and leave a
+   * record of the rejection. The record is named after the work commit, so it is written once
+   * however often this runs. Returns how many submissions for the task have been rejected.
+   */
+  async withdraw(sub, { worker = sub.worker, work = sub.head } = {}) {
+    const dir = this.mirror.dir;
+    const sha = await this.#docCommit({ kind: 'reject', task: sub.taskRef, work, worker, by: this.identity.id, ts: new Date().toISOString() });
+    await git(dir, ['push', '--quiet', '--force', 'origin', `${sha}:${REJECTED}/${sub.taskRef}/${work}`]);
+    // Unlike the tidy-up after a merge, this must not fail quietly: the task opens only if the branch is gone.
+    await git(dir, ['push', '--quiet', 'origin', ...(await this.#submissionRefs(sub))]);
+    return { where: `branch ${sub.id}`, rejections: (await this.#rejectionRefs(sub.taskRef)).length };
+  }
+
+  /** Maintainers: offer a parked task to workers again. The count of rejections starts over. */
+  async reopen(task) {
+    const refs = await this.#rejectionRefs(task.ref);
+    if (refs.length) await git(this.mirror.dir, ['push', '--quiet', 'origin', ...refs.map((r) => `:${r}`)]);
+  }
+
   async merge(sub) {
     const dir = this.mirror.dir;
     const branch = this.mirror.branch;
@@ -136,9 +182,7 @@ export class GitBoard {
     await git(dir, ['merge', '--quiet', '--no-ff', '-m', `Merge swarm submission ${sub.id}`, sub.head]);
     await git(dir, ['push', '--quiet', 'origin', `HEAD:refs/heads/${branch}`]);
     // Leave no refs behind: the work is in the default branch now, the receipt is the record.
-    const stale = [`:refs/heads/${sub.id}`];
-    const reviews = await git(dir, ['ls-remote', 'origin', `${REVIEWS}/${sub.taskRef}/${sub.worker}/*`]);
-    for (const line of reviews.split('\n').filter(Boolean)) stale.push(`:${line.split('\t')[1]}`);
+    const stale = [...(await this.#submissionRefs(sub)), ...(await this.#rejectionRefs(sub.taskRef)).map((r) => `:${r}`)];
     await run('git', ['push', '--quiet', 'origin', ...stale], { cwd: dir });
     return { where: branch };
   }

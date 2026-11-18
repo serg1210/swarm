@@ -7,7 +7,7 @@ import { completedTasks, protectedGlobs, verifySteps, receiptPath } from './proj
 import { git, diffSummary, checkPolicy, runVerify, describeFailure } from './verify.mjs';
 import { buildReceipt } from './receipt.mjs';
 import { makeWorkDir } from './repo.mjs';
-import { requiredQuorum } from './quorum.mjs';
+import { requiredQuorum, maxRejections } from './quorum.mjs';
 import { hold } from './outbox.mjs';
 
 export function buildPrompt({ project, task, feedback, hints, mode = 'cli', workDir, session, agentShell = false }) {
@@ -51,6 +51,7 @@ export function buildPrompt({ project, task, feedback, hints, mode = 'cli', work
       `Other volunteers' agents tried this task before you and did not get past: ${failures.map(([name, n]) => `${name} (${n}x)`).join(', ')}.`,
       'Take extra care with those checks before you finish.',
     );
+    if (hints.failures.review) lines.push('"review" means another agent read a finished change and rejected it: it did not do everything the task asks, or it weakened a test. Reread the task and cover all of it.');
   }
   if (feedback) {
     lines.push('', '# Previous attempt', 'Your earlier changes are still in the working tree. They were not accepted:', '', feedback, '', 'Fix the problem. Do not weaken or delete tests to make them pass.');
@@ -58,8 +59,12 @@ export function buildPrompt({ project, task, feedback, hints, mode = 'cli', work
   return lines.join('\n');
 }
 
-/** Tasks that are ready, not finished, and not already claimed by enough workers. */
-export function openTasks(projects, mirrorDir, claims, { projectId, taskRef, unpublished = new Set() } = {}) {
+/**
+ * Tasks that are ready, not finished, and not already claimed by enough workers.
+ * A task whose submissions were rejected in review `review.maxRejections` times is "stuck": more
+ * attempts would likely spend quota the same way, so it waits for a maintainer (`swarm reopen`).
+ */
+export function openTasks(projects, mirrorDir, claims, { projectId, taskRef, unpublished = new Set(), rejected = new Map() } = {}) {
   const open = [];
   for (const project of projects) {
     if (projectId && project.id !== projectId) continue;
@@ -67,7 +72,8 @@ export function openTasks(projects, mirrorDir, claims, { projectId, taskRef, unp
     for (const task of project.tasks) {
       if (taskRef && task.ref !== taskRef && task.id !== taskRef) continue;
       const live = claims.get(task.ref) || [];
-      const state = done.has(task.id) ? 'done' : task.status !== 'ready' ? task.status : unpublished.has(task.ref) ? 'unpublished' : live.length >= project.replication ? 'claimed' : 'open';
+      const stuck = (rejected.get(task.ref) || 0) >= maxRejections(project);
+      const state = done.has(task.id) ? 'done' : task.status !== 'ready' ? task.status : unpublished.has(task.ref) ? 'unpublished' : stuck ? 'stuck' : live.length >= project.replication ? 'claimed' : 'open';
       open.push({ project, task, state, claims: live });
     }
   }
