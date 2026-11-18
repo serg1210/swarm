@@ -41,8 +41,8 @@ not an independent review.
 
 > **Status: v0.1.** Tested end to end: the Claude Code and Codex runners, Hermes through the
 > connector, the macOS, Linux (bubblewrap) and Docker sandboxes, installing from the plugin
-> marketplace, and the GitHub flow both with push access and from a fork. Not yet tested: Cowork,
-> and Codex as a connector host. See [Known limits](#known-limits).
+> marketplace, a Claude Code cloud scheduled task, and the GitHub flow both with push access and from a fork.
+> Not yet tested: Cowork, and Codex as a connector host. See [Known limits](#known-limits).
 
 ## Without the plugin
 
@@ -75,7 +75,7 @@ to submit. `swarm review` verifies someone else's submission instead of writing 
 | Where | How | Tested |
 |---|---|---|
 | Claude Code on your computer | The plugin's connector starts the official CLI boxed in (no shell, no network), reads your quota windows first | Yes |
-| Claude Code cloud sessions and cloud scheduled tasks | The skill runs the CLI it carries inside the session's VM; this agent writes the change; GitHub goes through the session's connection | On a local stand-in only; not yet in a real cloud session |
+| Claude Code cloud sessions and cloud scheduled tasks | The skill runs the CLI it carries inside the session's VM; this agent writes the change; GitHub goes through the session's connection | Yes, in a real cloud scheduled task with push access; not yet from a fork |
 | Cowork on your computer | Same plugin; the connector submits, because a Cowork task's own shell cannot push to GitHub | No |
 | Codex | `swarm run --runner codex` starts the Codex CLI in its own sandbox | Yes |
 | Hermes | `swarm mcp` as a connector; Hermes writes the change itself | Yes |

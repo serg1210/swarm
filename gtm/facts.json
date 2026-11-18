@@ -15,7 +15,7 @@
     { "id": "chosen-projects", "claim": "Volunteers choose which projects their quota goes to. Nobody can send a volunteer's agent a task; only maintainers of a chosen project can, by merging a task file." },
     { "id": "pr-after-verify", "claim": "A pull request is opened only after verification passed on the volunteer's machine. Claims and failed attempts are signed comments on one issue per task." },
     { "id": "three-steps", "claim": "Swarm is three steps: install the plugin, choose a project, and leftover quota does tasks that project's maintainers wrote." },
-    { "id": "where-it-runs", "claim": "It runs in Claude Code on the user's computer (tested) and is built to run in Claude Code cloud sessions and scheduled tasks (not yet run in a real one). Installs for Cowork, Codex and Hermes are documented but not yet tested by the maintainers." },
+    { "id": "where-it-runs", "claim": "It runs in Claude Code on the user's computer and in Claude Code cloud scheduled tasks (both tested), with the Codex CLI (tested) and with Hermes through the connector (tested). The Cowork install is documented but not yet tested by the maintainers." },
     { "id": "cloud-quota", "claim": "On the user's computer Swarm reads the quota windows and keeps a reserve. In a cloud session it cannot, so leftover there means a run scheduled shortly before the weekly reset." },
     { "id": "opt-in", "claim": "Only repositories whose maintainers added a .swarm directory receive work, and only tasks the maintainers merged are executed." },
     { "id": "deps", "claim": "The CLI has zero npm dependencies and needs Node 20 or newer." },

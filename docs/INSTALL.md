@@ -6,7 +6,7 @@ that project's maintainers wrote. This page covers each place it can run.
 | Where | Who writes the change | Knows your quota | Tested by the maintainers |
 |---|---|---|---|
 | Claude Code on your computer | The official CLI, started by Swarm with no shell and no network | Yes, keeps a 20% reserve | Yes |
-| Claude Code cloud session or cloud scheduled task | The session's own agent, in its VM | No; scheduled before the weekly reset | On a local stand-in only |
+| Claude Code cloud session or cloud scheduled task | The session's own agent, in its VM | No; scheduled before the weekly reset | Yes, with push access; not yet from a fork |
 | Cowork on your computer | The official CLI if installed, else Cowork's agent through the connector | Only with the CLI installed | No |
 | Codex | The Codex CLI, started by Swarm in Codex's own sandbox | No | Yes |
 | Hermes | Hermes itself, through the connector | No | Yes |
@@ -51,16 +51,18 @@ way to spend leftover quota with your laptop closed.
 3. Optional: set `SWARM_HANDLE` to your GitHub login, and `SWARM_IDENTITY` to the output of
    `swarm identity export` on your computer, so every run signs as the same worker.
 
-What is different in the cloud, and what is not yet proven:
+What is different in the cloud, and what is proven:
 
 - GitHub is reached through the session's connection, only for repositories attached to the
   task, and only through GitHub's REST API. Swarm uses nothing else.
 - The project's checks run in the session's VM. It is disposable and holds no credentials, so it
   stands in for the sandbox; its network follows the cloud environment's settings instead of
   being off. Receipts record this as `cloud-vm`.
-- **Not yet run in a real cloud session.** The same path (skill, bundled CLI, an agent doing the
-  task, REST) is tested on a laptop standing in for one. Pushing through the cloud GitHub
-  connection, and submitting from a fork there, have not been exercised.
+- **Run in a real cloud scheduled task by the maintainers.** It claimed a task, wrote the change,
+  ran the checks and opened the pull request in about a minute, pushing through the session's
+  GitHub connection to a repository it could push to. That run used the Swarm CLI from the
+  repository's own checkout. Still not exercised there: the plugin installed on the account
+  (the skill loading in a cloud session), and submitting from a fork.
 
 ## Cowork in the Claude desktop app
 
