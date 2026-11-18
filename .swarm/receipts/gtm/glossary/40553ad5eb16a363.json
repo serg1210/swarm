@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "kind": "receipt",
+  "project": "gtm",
+  "task": "glossary",
+  "base": "899a1d6381d9bf6d6dc7358614539912101f74c0",
+  "work": "bc554946cbd3226ee0c800279bb2927a8e27c4d0",
+  "tree": "468b93635f8560a315b9c1e0cc108c37fa7d7b45",
+  "diffSha256": "cd4cf7c3d9711da8ae695c640e66a33790f9eeb5aa76114526511a44b3a5277f",
+  "filesChanged": 1,
+  "linesChanged": 44,
+  "agent": {
+    "runner": "claude",
+    "model": "claude-fable-5-2",
+    "version": "2.1.326"
+  },
+  "usage": {
+    "inputTokens": 147029,
+    "outputTokens": 3879,
+    "costUsd": 0.5608256,
+    "turns": 16,
+    "durationMs": 46968
+  },
+  "attempts": 1,
+  "sandbox": "seatbelt",
+  "verify": [
+    {
+      "name": "harness-tests",
+      "run": "node --test gtm/test/*.test.mjs",
+      "exit": 0,
+      "ms": 134,
+      "outputSha256": "310d3cfdaa770f928dbdced4416e521a120e53024d2630a90946ecc948ca9a27"
+    },
+    {
+      "name": "asset-checks",
+      "run": "node gtm/verify.mjs",
+      "exit": 0,
+      "ms": 55,
+      "outputSha256": "9932d97bda4fe6f9fb324da8a5173b95c0063da57b0baf6913e54ee59b98d4cf"
+    }
+  ],
+  "ts": "2026-11-18T01:29:59.972Z",
+  "signer": {
+    "id": "40553ad5eb16a363",
+    "handle": "serg1210",
+    "publicKey": "MCowBQYDK2VwAyEAwQ4qMVtkDJ1fGlPS9Yjqe2rUrpPnGUEVHRY2DPRQgQM="
+  },
+  "sig": "YrYMLFXNA/ZrbhQtlo4crkIscmYgNdamxSa+loZ1g26bj/ygq5VHdyT+Q+9vh8asrSRbEEvnzaTv6CEmmH8YCg=="
+}
