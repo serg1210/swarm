@@ -208,6 +208,9 @@ const commands = {
     check(found.length > 0, `agent CLI: ${found.join(', ') || 'none'}`, 'claude or codex, logged in with your own plan');
     try {
       const mode = await pickSandbox({});
+      // A cloud session's VM is the sandbox: there is nothing inside it to isolate from, so the
+      // self-test below (which expects the home directory to be out of reach) does not apply.
+      if (mode === 'cloud-vm') throw Object.assign(new Error('cloud-vm'), { cloudVm: true });
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swarm-doctor-'));
       // Judged from outside: some sandboxes show an empty, writable stand-in for the home
       // directory, so a write "succeeding" inside proves nothing either way.
@@ -235,7 +238,8 @@ const commands = {
             : '';
       check(!why, `sandbox: ${mode}`, why ? `self-test failed: ${why}` : 'home directory hidden, writes confined');
     } catch (err) {
-      check(false, 'sandbox', err.message);
+      if (err.cloudVm) check(true, 'sandbox: cloud-vm', "this session's disposable VM is the sandbox; checks run in it directly");
+      else check(false, 'sandbox', err.message);
     }
     // Not a failure: a fresh machine or cloud VM gets its key on first use.
     const id = loadIdentity();
