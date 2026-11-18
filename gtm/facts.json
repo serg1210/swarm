@@ -20,6 +20,8 @@
     { "id": "opt-in", "claim": "Only repositories whose maintainers added a .swarm directory receive work, and only tasks the maintainers merged are executed." },
     { "id": "deps", "claim": "The CLI has zero npm dependencies and needs Node 20 or newer." },
     { "id": "runners", "claim": "The Claude Code and Codex runners are tested end to end. With Codex, Swarm cannot read quota windows yet, so it keeps no reserve." },
+    { "id": "evidence", "claim": "Merged so far in the Swarm repository itself: a contribution from another person's machine sent from a fork, and a change written in a Claude Code cloud session on a schedule and then re-tested, reviewed and merged by a second agent with no person involved. Submissions written by Codex and by Hermes are open and waiting for a review from another worker." },
+    { "id": "reviewer-eval", "claim": "The repository carries an evaluation set for the reviewing agent: planted bad changes and clean controls. Each run's results are committed next to it. The set is small and does not yet separate a careful reviewer from an average one." },
     { "id": "license", "claim": "MIT licensed." },
     { "id": "terms", "claim": "Running the official CLI on your own machine under your own login is permitted today; providers can change plan terms, and Swarm is not affiliated with Anthropic or OpenAI." }
   ],

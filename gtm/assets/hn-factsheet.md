@@ -9,10 +9,17 @@ Use this when writing a launch post. Write the post yourself: Hacker News asks t
 
 ## What it is
 
-- A command-line tool that spends spare Claude Code or Codex plan quota on open-source tasks.
+- A plugin for Claude Code (and a command-line tool for Codex, Hermes and plain terminals) that spends spare plan quota on open-source tasks. Three steps: install, choose a project, leftover quota does tasks that project's maintainers wrote.
 - The agent runs on the volunteer's machine, through the official CLI, under the volunteer's own login. No token leaves the machine.
 - Projects opt in by adding a `.swarm` directory with tasks and verify commands. Volunteers choose which projects their quota goes to.
 - By default it leaves 20% of the weekly and 5-hour windows untouched and caps each agent run at $3 API-equivalent, with 2 attempts per task.
+
+## What has run so far
+
+- A contribution from another person's machine, sent from a fork, reviewed by the maintainer's agent and merged: https://github.com/serg1210/swarm/pull/14
+- A change written in a Claude Code cloud session on a schedule, then re-tested, reviewed and merged by a second agent with no person involved: https://github.com/serg1210/swarm/pull/17
+- Submissions written by Codex and by Hermes, open and waiting for a review from another worker: https://github.com/serg1210/swarm/pull/16 and https://github.com/serg1210/swarm/pull/15
+- An evaluation set for the reviewing agent is in the repository. Each run's results are committed next to it, under `eval/review/results`. The set is small and does not yet separate a careful reviewer from an average one.
 
 ## How verification works
 

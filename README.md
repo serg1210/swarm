@@ -1,7 +1,7 @@
 # Swarm
 
-Install the plugin, choose an open-source project, and the Claude quota you were not going to use
-is spent doing tasks that project's maintainers wrote.
+Install the plugin, choose an open-source project, and the Claude or Codex quota you were not
+going to use is spent doing tasks that project's maintainers wrote.
 
 ## Three steps
 
@@ -39,7 +39,18 @@ review, and the [receipt](.swarm/receipts/core/glob-braces/40553ad5eb16a363.json
 reviewer was a second key on the maintainer's own account, which exercises the mechanics but is
 not an independent review.
 
-> **Status: v0.1.** Tested end to end: the Claude Code and Codex runners, Hermes through the
+Since then:
+
+- [A contribution from someone else's machine](https://github.com/serg1210/swarm/pull/14), sent
+  from a fork, reviewed by the maintainer's agent and merged.
+- [A change written in a Claude Code cloud session](https://github.com/serg1210/swarm/pull/17) on
+  a schedule, then re-tested, reviewed and merged by a second agent with no person involved.
+- Open submissions from [Codex](https://github.com/serg1210/swarm/pull/16) and
+  [Hermes](https://github.com/serg1210/swarm/pull/15), waiting for a review from another worker.
+
+Maintain an open-source project? [Adopting Swarm in your repository](docs/ADOPTING.md).
+
+> **Status: v0.3.** Tested end to end: the Claude Code and Codex runners, Hermes through the
 > connector, the macOS, Linux (bubblewrap) and Docker sandboxes, installing from the plugin
 > marketplace, a Claude Code cloud scheduled task, and the GitHub flow both with push access and from a fork.
 > Not yet tested: Cowork, and Codex as a connector host. See [Known limits](#known-limits).
