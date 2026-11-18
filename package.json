@@ -1,6 +1,6 @@
 {
   "name": "swarm-at-home",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Put spare Claude Code / Codex subscription quota to work on verified open-source tasks. Your agent runs on your machine under your own login; results are sandbox-verified, signed and peer-reviewed.",
   "type": "module",
   "bin": { "swarm": "bin/swarm.mjs" },
