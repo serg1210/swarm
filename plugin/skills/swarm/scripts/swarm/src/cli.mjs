@@ -192,6 +192,7 @@ export async function gatherBriefing({ args = {}, probeQuota = true, identity } 
   const chosen = list.map((t) => (t.project ? `${t.repo}#${t.project}` : t.repo));
   const usingDefault = !(args.repo || process.env.SWARM_REPO) && !(config.chosen || []).length;
   const tasksByRepo = {};
+  const activity = {};
   for (const spec of new Set([...list.map((t) => t.repo), ...registry.map((p) => p.repo)])) {
     try {
       const { mirror, board } = await openRepo(spec, identity);
@@ -205,11 +206,20 @@ export async function gatherBriefing({ args = {}, probeQuota = true, identity } 
         size: r.task.size,
         state: r.state,
       }));
+      // Agents on each project now: submitted and waiting for review, or holding a live claim.
+      const submitted = await board.submissions();
+      const has = (taskRef, worker) => submitted.some((x) => x.taskRef === taskRef && String(worker).startsWith(String(x.worker).slice(0, 8)));
+      for (const p of mirror.projects) {
+        const finishing = submitted.filter((x) => x.taskRef.startsWith(`${p.id}/`)).length;
+        let working = 0;
+        for (const [taskRef, list] of claims) if (taskRef.startsWith(`${p.id}/`)) working += list.filter((c) => !c.submitted && !has(taskRef, c.worker)).length;
+        activity[`${spec}#${p.id}`] = { finishing, working };
+      }
     } catch (err) {
       tasksByRepo[spec] = { error: String(err.message).split('\n')[0] };
     }
   }
-  return buildBriefing({ rateLimit, decision, reserve, cloud, registry, chosen, usingDefault, tasksByRepo });
+  return buildBriefing({ rateLimit, decision, reserve, cloud, registry, chosen, usingDefault, tasksByRepo, activity });
 }
 
 /** Options for the protected merge step, from the command line. */

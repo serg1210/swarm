@@ -38,14 +38,20 @@ function quotaView({ rateLimit, decision, reserve, cloud, now }) {
       reservePct,
       go: decision?.go ?? true,
       headline: cloud ? 'Quota unknown in the cloud.' : 'Quota unknown here. No reserve kept.',
-      line: 'Quota: unknown here',
+      line: 'Contributing quota, amount unknown here',
     };
   }
   const main = weekly || fiveHour;
   const label = weekly ? 'this week' : 'in this 5-hour window';
   const go = decision?.go ?? true;
   const headline = go ? `${main.leftPct}% left ${label}. Swarm uses ${main.swarmCanUsePct}%.` : `Reserve reached: ${main.usedPct}% used. Nothing spent.`;
-  const line = go ? `Quota: ${main.leftPct}% left, Swarm uses ${main.swarmCanUsePct}%` : `Quota: ${main.usedPct}% used, reserve reached`;
+  // The leftover that lapses first is the one worth naming: its size and when it expires.
+  const soonest = [fiveHour, weekly].filter((w) => w?.resetsAt).sort((a, b) => new Date(a.resetsAt) - new Date(b.resetsAt))[0] || main;
+  const line = !go
+    ? `Quota: ${main.usedPct}% used, reserve reached`
+    : soonest.resetsIn
+      ? `Contributing ${soonest.swarmCanUsePct}% quota, expires in ${soonest.resetsIn}`
+      : `Contributing ${soonest.swarmCanUsePct}% of leftover quota`;
   return { known: true, reservePct, go, reason: decision?.reason || null, weekly, fiveHour, headline, line };
 }
 
@@ -54,7 +60,7 @@ function quotaView({ rateLimit, decision, reserve, cloud, now }) {
  * chosen:     ['owner/repo#project' | 'owner/repo']               what the user picked
  * tasksByRepo: { [repo]: [{ project, projectName, projectDescription, ref, title, size, state }] | { error } }
  */
-export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2, cloud = false, registry = [], chosen = [], usingDefault = false, tasksByRepo = {}, now = new Date() }) {
+export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2, cloud = false, registry = [], chosen = [], usingDefault = false, tasksByRepo = {}, activity = {}, now = new Date() }) {
   const quota = quotaView({ rateLimit, decision, reserve, cloud, now });
 
   const isChosen = (repo, project) => chosen.some((c) => c === repo || c === `${repo}#${project}`);
@@ -101,12 +107,29 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
 
   const plan = !quota.go ? 'Nothing spent.' : next ? `${next.projectName}: ${shortTitle(next.title)}` : suggestion ? suggestion.reason : 'Nothing open. Nothing spent.';
 
+  // Other agents on the same project right now: finishing = work submitted and waiting for a
+  // review, working = a live claim with nothing submitted yet. Real counts, or it says so.
+  const focus = withWork || mine[0] || null;
+  const seen = focus ? activity[`${focus.id}`] || { finishing: 0, working: 0 } : { finishing: 0, working: 0 };
+  const agents = (n) => `${n} agent${n === 1 ? '' : 's'}`;
+  const crowd =
+    seen.finishing && seen.working
+      ? `${agents(seen.finishing)} finishing, ${seen.working} working`
+      : seen.finishing
+        ? `${agents(seen.finishing)} about to finish`
+        : seen.working
+          ? `${agents(seen.working)} working right now`
+          : 'No agents here yet, you start';
+  const openHere = withWork ? withWork._open.length : 0;
+  const boost = withWork ? `Accelerating ${shortTitle(withWork.name, 2)}: 1 of ${openHere} task${openHere === 1 ? '' : 's'}` : null;
+
   // The run as a checklist: one short line per step, in the order they happen.
+  const willRun = Boolean(quota.go && next);
   const steps = !quota.go
-    ? [quota.line, 'Nothing spent']
+    ? [crowd, quota.line, 'Nothing spent']
     : !next
-      ? [quota.line, 'Nothing open, nothing spent']
-      : [quota.line, `Project: ${short(next.projectName, 32)}`, `Claim task: ${shortTitle(next.title)}`, 'Agent writes the change', 'Checks run in sandbox', 'Pull request opens'];
+      ? [crowd, quota.line, 'Nothing open, nothing spent']
+      : [crowd, quota.line, boost, `Claim task: ${shortTitle(next.title)}`, 'Agent writes the change', 'Checks run in sandbox', 'Pull request opens'];
 
   const choice = (p) => ({
     id: p.id,
@@ -125,6 +148,8 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
   return {
     quota,
     plan,
+    willRun,
+    agents: seen,
     steps,
     next,
     suggestion,
@@ -136,15 +161,15 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
 }
 
 const STAGES = [
-  [/Submitted /, 6, 'Pull request opened', true],
-  [/Dry run: nothing pushed/, 6, 'Dry run done, nothing pushed', true],
-  [/Verified:/, 6, 'Opening pull request'],
-  [/^›\s{2,}([\w.-]+): /, 5, (m) => `Running check: ${m[1]}`],
-  [/Verifying in (\w+) sandbox/, 5, 'Running checks in sandbox'],
-  [/Agent (\w+) working \(attempt (\d+)/, 4, (m) => `Agent ${m[1]} writing, attempt ${m[2]}`],
-  [/Claiming (\S+?):/, 3, (m) => `Claiming ${m[1]}`],
-  [/Not donating now/, 1, 'Reserve reached, nothing spent', true],
-  [/Checking your quota/, 1, 'Checking quota'],
+  [/Submitted /, 7, 'Pull request opened', true],
+  [/Dry run: nothing pushed/, 7, 'Dry run done, nothing pushed', true],
+  [/Verified:/, 7, 'Opening pull request'],
+  [/^›\s{2,}([\w.-]+): /, 6, (m) => `Running check: ${m[1]}`],
+  [/Verifying in (\w+) sandbox/, 6, 'Running checks in sandbox'],
+  [/Agent (\w+) working \(attempt (\d+)/, 5, (m) => `Agent ${m[1]} writing, attempt ${m[2]}`],
+  [/Claiming (\S+?):/, 4, (m) => `Claiming ${m[1]}`],
+  [/Not donating now/, 2, 'Reserve reached, nothing spent', true],
+  [/Checking your quota/, 2, 'Checking quota'],
   [/Syncing /, 1, 'Syncing the project'],
 ];
 
@@ -161,12 +186,21 @@ export function jobProgress(log) {
       const m = re.exec(line);
       if (!m) continue;
       const out = { step, now: typeof now === 'function' ? now(m) : now, done: Boolean(done) };
-      const url = step === 6 && done ? /https?:\/\/\S+/.exec(line) : null;
+      const url = step === 7 && done ? /https?:\/\/\S+/.exec(line) : null;
       if (url) out.pullRequest = url[0];
       // A failed check is news while the agent gets another attempt, and stale once checks pass.
-      if (failed && !done && step < 6) out.problem = shortTitle(failed, 7);
+      if (failed && !done && step < 7) out.problem = shortTitle(failed, 7);
       return out;
     }
   }
   return { step: 0, now: 'Starting', done: false };
+}
+
+/**
+ * The one line under the checklist. It swaps on every poll: what the job is doing when that has
+ * changed since the last look, otherwise how long it has been going, so the line never sits still.
+ */
+export function statusLine(progress, { elapsedMs = 0, previous = null } = {}) {
+  if (progress.done || progress.now !== previous?.now || previous?.showedElapsed) return { text: progress.now, showedElapsed: false };
+  return { text: `Still at it, ${fmtDuration(elapsedMs)} in`, showedElapsed: true };
 }

@@ -29,16 +29,18 @@ Use the first that applies:
 ## Show the run as a checklist
 
 The user sees a Swarm run as one short checklist that ticks itself off, and one status line
-under it. Nothing else: no greeting, no explanation of Swarm, no paragraphs, no adjectives.
-Seven words a line is the limit.
+under it that keeps changing. Nothing else: no greeting, no explanation of Swarm, no
+paragraphs, no adjectives. Seven words a line is the limit.
 
 1. **Get the briefing.** Call `swarm_brief` (connector) or run `SWARM brief --json` (shell).
-2. **Put `steps` on screen as the checklist**, wording unchanged, with this app's task-list tool
-   (the to-do or plan list in Claude Code, the desktop app and Cowork). If the app has none,
-   print them as a plain list. The steps already say how much quota is left, which project,
-   which task, and what happens after. Do not add steps, merge them or lengthen them.
-3. **Stop if there is nothing to do.** When `steps` has two entries (the reserve is reached, or
-   nothing is open), show them, spend nothing, and stop.
+2. **Put `steps` on screen as the checklist**, wording unchanged and in order, with this app's
+   task-list tool (the to-do or plan list in Claude Code, the desktop app and Cowork). If the
+   app has none, print them as a plain list. The first three lines are the pitch, with real
+   numbers: how many other agents are on the project, how much quota is being contributed and
+   when it expires, and how much of the project's open work this run takes. Then the task, and
+   what happens to it. Do not add steps, merge them, reword them or lengthen them.
+3. **Stop if there is nothing to do.** When `willRun` is false (the reserve is reached, or
+   nothing is open), show the steps, spend nothing, and stop.
 4. **Offer the project, when a person is there.** If the user just asked for this (it is not a
    scheduled or unattended run), ask one question before starting, with this app's question or
    choice tool (AskUserQuestion in Claude Code; an interactive choice elsewhere): "Which
@@ -48,14 +50,17 @@ Seven words a line is the limit.
    use it for this run and get the briefing again so the checklist matches. Save it as their
    choice (`swarm_choose` or `SWARM choose <id>`) only when `usingDefault` is true or they say
    to keep it. On a scheduled or unattended run never ask.
-5. **Tick as it happens.**
-   - Steps 1 and 2 (quota, project) are done once the checklist is shown.
-   - When Swarm runs the agent for you: each `swarm_job` reply has `progress.step`, the step it
-     is on, and `progress.now`, what it is doing in a few words. Mark the steps before it done,
-     that one in progress, and show `progress.now` as the status line, followed by
-     `progress.problem` when there is one.
-   - When you do the task yourself: step 3 is done when `swarm_begin` or `task begin` returns,
-     step 4 is in progress while you edit, steps 5 and 6 while the finish call runs.
+5. **Tick as it happens, and keep the status line moving.**
+   - Steps 1 to 3 are done once the checklist is shown.
+   - When Swarm runs the agent for you: poll `swarm_job` about every 30 seconds. Each reply has
+     `progress.step`, the step it is on, and `progress.status`, the line to show under the
+     checklist. Mark the steps before it done and that one in progress, and replace the status
+     line with `progress.status` every time (where the task list has a status or active text
+     for the step in progress, put it there). It changes on every reply, so the line never sits
+     still. Show `progress.problem` after it when there is one.
+   - When you do the task yourself: step 4 is done when `swarm_begin` or `task begin` returns,
+     step 5 is in progress while you edit, steps 6 and 7 while the finish call runs. Your status
+     line says what you are doing in seven words at most, and changes as you move.
    - At the end every step is ticked and the status line is the pull request link, or one
      short line saying why nothing was submitted.
 6. **Do what was shown.** Pass `next.task` as the task, and the part of `next.project` before
@@ -71,7 +76,7 @@ Pick the first way that this session supports.
 1. Call `swarm_status`. Stop and report if `sandbox` starts with "unavailable". The briefing
    above has already settled whether there is quota to spend: keeping the reserve is the point.
 2. If `agentCLIs` is not empty: call `swarm_donate` with the task from the briefing and
-   `max_tasks: 1`, then `swarm_job` about every 45 seconds until `state` is "finished" (give up
+   `max_tasks: 1`, then `swarm_job` about every 30 seconds until `state` is "finished" (give up
    waiting after 40 minutes).
 3. Otherwise: call `swarm_begin` with that task and `agent` set to the app you are running in,
    follow the returned `instructions` using only the `swarm_*` file tools, then call
@@ -118,8 +123,10 @@ worker. Report what it reviewed, merged and left waiting.
 
 ## Report
 
-The finished checklist is the report. Add one line: the pull request link, or why nothing was
-submitted. Nothing more unless the user asks.
+The finished checklist is the report. Add exactly one line under it: the pull request link, or
+why nothing was submitted. No bullets, no cost, no file counts, no summary of the change, unless
+the user asks. While the run is going, say nothing between polls: the checklist and its status
+line do the talking.
 
 ## Rules
 

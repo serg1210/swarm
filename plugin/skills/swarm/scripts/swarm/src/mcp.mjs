@@ -21,7 +21,7 @@ import { pickSandbox } from './sandbox.mjs';
 import { detectRunners, getRunner } from './runners/index.mjs';
 import { openRepo } from './open.mjs';
 import { openTasks } from './worker.mjs';
-import { jobProgress } from './briefing.mjs';
+import { jobProgress, statusLine } from './briefing.mjs';
 import { targets, loadConfig, saveConfig, defaultHandle, quotaDecision, gatherBriefing } from './cli.mjs';
 import * as sessions from './session.mjs';
 
@@ -59,13 +59,21 @@ function jobStatus(id) {
   const running = job.exit === undefined && alive(job.pid);
   const status = { job: id, kind: job.kind, state: running ? 'running' : 'finished', exitCode: job.exit ?? null, startedAt: job.startedAt };
   // For a donate run: which checklist step it is on and a few words on what it is doing now.
-  if (job.kind === 'donate') status.progress = jobProgress(log);
+  if (job.kind === 'donate') {
+    const progress = jobProgress(log);
+    // What the last poll showed lives in its own file: the job's record is written by the exit
+    // handler, and two writers on one file could lose the exit code.
+    const shownFile = path.join(jobsDir(), `${id}.shown.json`);
+    const line = statusLine(progress, { elapsedMs: Date.now() - new Date(job.startedAt).getTime(), previous: readJson(shownFile, null) });
+    status.progress = { ...progress, status: line.text };
+    if (running) writeJson(shownFile, { now: progress.now, showedElapsed: line.showedElapsed });
+  }
   return { ...status, log: tail(log, 40) };
 }
 
 function runningJob() {
   if (!fs.existsSync(jobsDir())) return null;
-  for (const f of fs.readdirSync(jobsDir()).filter((x) => x.endsWith('.json'))) {
+  for (const f of fs.readdirSync(jobsDir()).filter((x) => x.endsWith('.json') && !x.endsWith('.shown.json'))) {
     const job = readJson(path.join(jobsDir(), f), null);
     if (job && job.exit === undefined && alive(job.pid)) return job.id;
   }
@@ -233,7 +241,7 @@ export const TOOLS = [
   },
   {
     name: 'swarm_job',
-    description: 'Status and recent output of a background job started by swarm_donate, swarm_review or swarm_maintain. For a donate run, `progress.step` is the checklist step from swarm_brief it has reached (1-based) and `progress.now` says in a few words what it is doing.',
+    description: 'Status and recent output of a background job started by swarm_donate, swarm_review or swarm_maintain. For a donate run, `progress.step` is the checklist step from swarm_brief it has reached (1-based) and `progress.status` is the line to show under the checklist; it changes on every call.',
     inputSchema: S({ job: str('Job id.') }, ['job']),
     readOnly: true,
     async run(a) {

@@ -8,7 +8,7 @@ Three things to settle with the user, in this order. Ask, do not assume.
 
 1. Get the briefing: call `swarm_brief`, or run `SWARM brief --json`. Its `choices` list has every
    project that opted in, with a short label and a description that includes how many tasks are
-   open and an example. Show the first line of `steps` (the quota) first, so the user knows what
+   open and an example. Show the second line of `steps` (the quota) first, so the user knows what
    they have to give. Keep everything you say here to short lines.
 2. Let the user pick, with this app's question or choice tool (AskUserQuestion in Claude Code; an
    interactive choice elsewhere), one option per project using `label` and `description` as
