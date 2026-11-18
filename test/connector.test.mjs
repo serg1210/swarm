@@ -187,6 +187,11 @@ test('shell mode: an agent with its own tools edits the clone, Swarm verifies an
     const r = spawnSync(process.execPath, [BIN, ...args], { env, encoding: 'utf8' });
     return { code: r.status, json: r.stdout.trim() ? JSON.parse(r.stdout) : null, err: r.stderr };
   };
+  // The skill runs doctor first and stops if it fails. In a cloud session the VM is the
+  // sandbox, so doctor must not apply its isolation self-test there (a real cloud run failed on it).
+  const doctor = spawnSync(process.execPath, [BIN, 'doctor'], { env, encoding: 'utf8' });
+  assert.match(doctor.stdout + doctor.stderr, /✓ sandbox: cloud-vm/);
+  assert.doesNotMatch(doctor.stdout + doctor.stderr, /✗ sandbox/);
   const begun = swarm(['task', 'begin', '--repo', remote, '--task', 'demo/two', '--agent', 'cloud-session']);
   assert.equal(begun.json.task, 'demo/two', begun.err);
   assert.ok(fs.existsSync(path.join(begun.json.workDir, 'src/index.mjs')));
