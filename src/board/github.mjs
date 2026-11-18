@@ -103,22 +103,67 @@ export class GitHubBoard {
     return this._push;
   }
 
+  /** Where a push to "owner/name" goes, and the git options that let gh supply the credential. */
+  async #pushUrl(target) {
+    const proto = CLOUD ? 'https' : (await run('gh', ['config', 'get', 'git_protocol', '-h', 'github.com'])).stdout.trim();
+    const ssh = proto === 'ssh';
+    // On a laptop gh supplies the https credential, so Swarm never handles a token. In a cloud
+    // session the GitHub proxy does, and a helper of ours would only get in its way.
+    return { url: ssh ? `git@github.com:${target}.git` : `https://github.com/${target}.git`, helper: !ssh && !CLOUD ? '!gh auth git-credential' : null };
+  }
+
   /**
    * Git remote to push work to: the project itself for people with push access, otherwise the
-   * volunteer's fork (created on first use). The URL follows gh's configured protocol, and over
-   * https gh supplies the credential, so Swarm never handles a token.
+   * volunteer's fork (created on first use).
    */
   async #pushRemote(workDir) {
     let target = this.repo; // "owner/name" to push to
     if (!(await this.canPush())) target = await this.#fork();
-    const proto = CLOUD ? 'https' : (await run('gh', ['config', 'get', 'git_protocol', '-h', 'github.com'])).stdout.trim();
-    const url = proto === 'ssh' ? `git@github.com:${target}.git` : `https://github.com/${target}.git`;
+    const { url, helper } = await this.#pushUrl(target);
     await run('git', ['remote', 'remove', 'swarm-push'], { cwd: workDir });
     await git(workDir, ['remote', 'add', 'swarm-push', url]);
-    // On a laptop gh supplies the https credential. In a cloud session the GitHub proxy does,
-    // and a helper of ours would only get in its way.
-    if (proto !== 'ssh' && !CLOUD) await git(workDir, ['config', 'credential.https://github.com.helper', '!gh auth git-credential']);
+    if (helper) await git(workDir, ['config', 'credential.https://github.com.helper', helper]);
     return { remote: 'swarm-push', owner: target.split('/')[0] };
+  }
+
+  /**
+   * Can work done here be submitted? Asked before any quota is spent, so nobody's agent does a
+   * task that then has nowhere to go. It ends with a push that sends nothing (`--dry-run`):
+   * GitHub answers that only for someone allowed to write, which also catches an expired login,
+   * a read-only token and a session whose GitHub connection does not cover this repository.
+   * With `prepare` the volunteer's fork is created if it is needed; without it nothing changes.
+   */
+  async access({ prepare = false } = {}) {
+    const no = (reason) => ({ ok: false, reason });
+    if (!CLOUD && (await run('gh', ['api', 'user', '-q', '.login'])).code !== 0) return no('the GitHub login here is missing or expired');
+    let push;
+    try {
+      push = await this.canPush();
+    } catch {
+      return no(`${this.repo} is out of reach for the GitHub login here`);
+    }
+    let target = this.repo;
+    if (!push) {
+      if (process.env.SWARM_FORK) target = process.env.SWARM_FORK;
+      else if (CLOUD) return no(`this cloud session has no write access to ${this.repo} or to a fork of it`);
+      else if (!prepare) return { ok: true, route: 'fork' };
+      else {
+        try {
+          target = await this.#fork();
+        } catch (err) {
+          return no(String(err.message).trim().split('\n')[0]);
+        }
+      }
+    }
+    const { url, helper } = await this.#pushUrl(target);
+    const opts = helper ? ['-c', 'credential.https://github.com.helper=', '-c', `credential.https://github.com.helper=${helper}`] : [];
+    const res = await run('git', [...opts, 'push', '--dry-run', '--quiet', url, `${this.mirror.base}:refs/heads/swarm/access-check`], {
+      cwd: this.mirror.dir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      timeoutMs: 60_000,
+    });
+    if (res.code !== 0) return no(`GitHub refused a push to ${target} (${(res.stderr || '').trim().split('\n')[0].replace(/^remote:\s*/, '') || 'no reason given'})`);
+    return { ok: true, route: push ? 'direct' : 'fork' };
   }
 
   /**
@@ -128,6 +173,7 @@ export class GitHubBoard {
    */
   async #fork() {
     if (process.env.SWARM_FORK) return process.env.SWARM_FORK; // for sessions that cannot create one
+    if (this._fork) return this._fork;
     let fork;
     try {
       fork = await this.api('POST', `${this.repoPath}/forks`, {});
@@ -136,7 +182,7 @@ export class GitHubBoard {
     }
     const name = fork.full_name;
     for (let i = 0; i < 20; i++) {
-      if ((await run('gh', ['api', `repos/${name}/git/refs/heads/${this.mirror.branch}`])).code === 0) return name;
+      if ((await run('gh', ['api', `repos/${name}/git/refs/heads/${this.mirror.branch}`])).code === 0) return (this._fork = name);
       await new Promise((r) => setTimeout(r, 3000));
     }
     throw new Error(`Your fork ${name} was requested but is not ready yet. Wait a minute and run again.`);

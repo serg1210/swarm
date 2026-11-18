@@ -20,6 +20,7 @@ import { lintRepo } from './lint.mjs';
 import { readHistory, summarizeHistory } from './history.mjs';
 import { buildBriefing } from './briefing.mjs';
 import { openRepo } from './open.mjs';
+import { flushOutbox, held } from './outbox.mjs';
 
 const PKG = readJson(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'));
 const BOOLEANS = new Set(['dry-run', 'json', 'force', 'unsafe-no-sandbox', 'help', 'include-mine', 'no-verify', 'all', 'remove', 'no-quota']);
@@ -28,7 +29,7 @@ const HELP = `${c.bold('swarm')} ${PKG.version}: put spare Claude Code / Codex q
 
 ${c.bold('Volunteer')}
   swarm init [--handle <name>] [--repo <repo>]   create your local identity
-  swarm doctor                                   check tools, login and sandbox
+  swarm doctor                                   check tools, login, sandbox and that a finished task can be submitted
   swarm quota                                    show your current rate-limit windows
   swarm brief [--json]                           quota left, what the next run will do, and other projects you could choose
   swarm projects                                 list projects that opted in to Swarm
@@ -193,9 +194,13 @@ export async function gatherBriefing({ args = {}, probeQuota = true, identity } 
   const usingDefault = !(args.repo || process.env.SWARM_REPO) && !(config.chosen || []).length;
   const tasksByRepo = {};
   const activity = {};
+  const access = {};
   for (const spec of new Set([...list.map((t) => t.repo), ...registry.map((p) => p.repo)])) {
     try {
       const { mirror, board } = await openRepo(spec, identity);
+      // Could a finished task be submitted from here? Asked first, so a run that could not is
+      // never started, and so the reason given is this one rather than whatever fails next.
+      access[spec] = await board.access();
       const claims = await board.claims(mirror.projects);
       tasksByRepo[spec] = openTasks(mirror.projects, mirror.dir, claims, { unpublished: board.unpublished }).map((r) => ({
         project: r.project.id,
@@ -219,7 +224,7 @@ export async function gatherBriefing({ args = {}, probeQuota = true, identity } 
       tasksByRepo[spec] = { error: String(err.message).split('\n')[0] };
     }
   }
-  return buildBriefing({ rateLimit, decision, reserve, cloud, registry, chosen, usingDefault, tasksByRepo, activity });
+  return buildBriefing({ rateLimit, decision, reserve, cloud, registry, chosen, usingDefault, tasksByRepo, activity, access, waiting: held().length });
 }
 
 /** Options for the protected merge step, from the command line. */
@@ -242,7 +247,7 @@ const commands = {
     log(`\nNext: ${c.bold('swarm doctor')}, then ${c.bold('swarm tasks')} and ${c.bold('swarm run')}.`);
   },
 
-  async doctor() {
+  async doctor(args = {}) {
     const line = (good, label, detail = '') => log(`${good ? c.green('✓') : c.red('✗')} ${label}${detail ? c.dim('  ' + detail) : ''}`);
     let problems = 0;
     const check = (good, label, detail) => {
@@ -296,6 +301,17 @@ const commands = {
       if (err.cloudVm) check(true, 'sandbox: cloud-vm', "this session's disposable VM is the sandbox; checks run in it directly");
       else check(false, 'sandbox', err.message);
     }
+    // The one question that decides whether a run is worth starting: could its result be submitted?
+    const spec = targets(args, loadConfig())[0].repo;
+    try {
+      const { board } = await openRepo(spec, loadIdentity());
+      const access = await board.access();
+      check(access.ok, `can submit to ${spec}`, access.ok ? (access.route === 'fork' ? 'through your fork' : '') : access.reason);
+    } catch (err) {
+      check(false, `can submit to ${spec}`, String(err.message).split('\n')[0]);
+    }
+    const waiting = held().length;
+    if (waiting) line(true, `${waiting} finished task${waiting === 1 ? '' : 's'} waiting to be submitted`, 'goes out at the start of the next run');
     // Not a failure: a fresh machine or cloud VM gets its key on first use.
     const id = loadIdentity();
     line(true, id ? `identity ${id.id} (${id.handle})` : 'identity: none yet', id ? '' : 'created automatically on the first run');
@@ -422,16 +438,25 @@ const commands = {
       if (!d.go) return warn(`Not donating now: ${d.reason}. Use --force to override.`);
     }
 
+    // Work verified on an earlier run that could not be submitted then goes out first.
+    if (!args['dry-run']) await flushOutbox({ identity: ctx.identity });
+
     const maxTasks = Number(args['max-tasks'] ?? 1);
-    const total = { submitted: 0, failed: 0, costUsd: 0 };
+    const total = { submitted: 0, failed: 0, held: 0, costUsd: 0 };
     // Spread work over the chosen projects: start somewhere random, then go round.
     const list = targets(args, ctx.config);
     const start = Math.floor(Math.random() * list.length);
     let stop = false;
-    for (let i = 0; i < list.length && !stop && total.submitted + total.failed < maxTasks; i++) {
+    for (let i = 0; i < list.length && !stop && total.submitted + total.failed + total.held < maxTasks; i++) {
       const target = list[(start + i) % list.length];
       const here = i === 0 && list.length === 1 ? ctx : await context(args, { repoSpec: target.repo });
-      while (total.submitted + total.failed < maxTasks) {
+      // Nobody's quota goes into a task whose result could not be submitted from here.
+      const access = args['dry-run'] ? { ok: true } : await here.board.access({ prepare: true });
+      if (!access.ok) {
+        warn(`Cannot submit from here: ${access.reason}. No task was started and no quota was spent on one.`);
+        continue;
+      }
+      while (total.submitted + total.failed + total.held < maxTasks) {
         const claims = await here.board.claims(here.mirror.projects);
         const candidates = openTasks(here.mirror.projects, here.mirror.dir, claims, { projectId: target.project, taskRef: args.task, unpublished: here.board.unpublished }).filter((r) => r.state === 'open');
         if (!candidates.length) {
@@ -443,6 +468,7 @@ const commands = {
         const res = await workOn({ ...here, runner, project: pick.project, task: pick.task, opts });
         total.costUsd += res.usage?.costUsd || 0;
         if (res.status === 'submitted' || res.status === 'dry-run') total.submitted++;
+        else if (res.status === 'held') total.held++;
         else if (res.status === 'failed') total.failed++;
         if (args.task) {
           stop = true;
@@ -458,7 +484,7 @@ const commands = {
         }
       }
     }
-    log(`\n${c.bold('Session')}: ${total.submitted} submitted, ${total.failed} failed, ${fmtUsd(total.costUsd)} API-equivalent quota used.`);
+    log(`\n${c.bold('Session')}: ${total.submitted} submitted, ${total.held ? `${total.held} kept for the next run, ` : ''}${total.failed} failed, ${fmtUsd(total.costUsd)} API-equivalent quota used.`);
   },
 
   async history(args) {

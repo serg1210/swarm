@@ -8,6 +8,7 @@ import { git, diffSummary, checkPolicy, runVerify, describeFailure } from './ver
 import { buildReceipt } from './receipt.mjs';
 import { makeWorkDir } from './repo.mjs';
 import { requiredQuorum } from './quorum.mjs';
+import { hold } from './outbox.mjs';
 
 export function buildPrompt({ project, task, feedback, hints, mode = 'cli', workDir, session, agentShell = false }) {
   const cloud = process.env.CLAUDE_CODE_REMOTE === 'true';
@@ -93,7 +94,7 @@ export function record(entry) {
 }
 
 /**
- * Work on one task. Returns { status: 'submitted' | 'failed' | 'lost-claim' | 'dry-run', ... }.
+ * Work on one task. Returns { status: 'submitted' | 'held' | 'failed' | 'lost-claim' | 'dry-run', ... }.
  */
 export async function workOn({ repo, mirror, board, identity, runner, project, task, opts }) {
   const branch = board.branchFor(task);
@@ -178,7 +179,18 @@ export async function workOn({ repo, mirror, board, identity, runner, project, t
       ok(`Dry run: nothing pushed. Result is in ${workDir}`);
       return { status: 'dry-run', usage, rateLimit, workDir, receipt };
     }
-    const sub = await board.submit({ workDir, branch, claim, project, task, receipt, summary, approvalsNeeded: requiredQuorum(project, diff.files.map((f) => f.file)) });
+    const approvalsNeeded = requiredQuorum(project, diff.files.map((f) => f.file));
+    let sub;
+    try {
+      sub = await board.submit({ workDir, branch, claim, project, task, receipt, summary, approvalsNeeded });
+    } catch (err) {
+      // Verified and signed, but the project is out of reach right now. Keep it; the next run
+      // submits it before starting anything new. The claim is left to lapse on its own.
+      hold({ repoSpec: repo.github || repo.url, taskRef: task.ref, workDir, branch, claim, receipt, summary, approvalsNeeded, runner: runner.name, usage, error: err });
+      record({ repo: repo.slug, task: task.ref, status: 'held', usage, runner: runner.name });
+      warn(`Work kept: ${c.bold(task.ref)} is verified but could not be submitted now (${String(err.message).trim().split('\n')[0]}). Swarm submits it on the next run.`);
+      return { status: 'held', usage, rateLimit, receipt };
+    }
     record({ repo: repo.slug, task: task.ref, status: 'submitted', usage, runner: runner.name, where: sub.where });
     ok(`Submitted ${c.bold(task.ref)} → ${sub.where}  ${c.dim(`(${fmtUsd(usage.costUsd)} API-equivalent, ${fmtDuration(usage.durationMs)})`)}`);
     fs.rmSync(workDir, { recursive: true, force: true });

@@ -47,8 +47,10 @@ function quotaView({ rateLimit, decision, reserve, cloud, now }) {
   const headline = go ? `${main.leftPct}% left ${label}. Swarm uses ${main.swarmCanUsePct}%.` : `Reserve reached: ${main.usedPct}% used. Nothing spent.`;
   // The leftover that lapses first is the one worth naming: its size and when it expires.
   const soonest = [fiveHour, weekly].filter((w) => w?.resetsAt).sort((a, b) => new Date(a.resetsAt) - new Date(b.resetsAt))[0] || main;
+  // When the reserve stops a run, name the window that reached it, not the one with room left.
+  const full = [fiveHour, weekly].find((w) => w && w.leftPct <= reservePct) || main;
   const line = !go
-    ? `Quota: ${main.usedPct}% used, reserve reached`
+    ? `Quota: ${full.usedPct}% used, reserve reached`
     : soonest.resetsIn
       ? `Contributing ${soonest.swarmCanUsePct}% quota, expires in ${soonest.resetsIn}`
       : `Contributing ${soonest.swarmCanUsePct}% of leftover quota`;
@@ -59,8 +61,10 @@ function quotaView({ rateLimit, decision, reserve, cloud, now }) {
  * registry:   [{ repo, project, name, description, languages }]   projects that opted in
  * chosen:     ['owner/repo#project' | 'owner/repo']               what the user picked
  * tasksByRepo: { [repo]: [{ project, projectName, projectDescription, ref, title, size, state }] | { error } }
+ * access:     { [repo]: { ok, reason } }   whether a finished task could be submitted from here
+ * waiting:    how many finished tasks from earlier runs still wait to be submitted
  */
-export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2, cloud = false, registry = [], chosen = [], usingDefault = false, tasksByRepo = {}, activity = {}, now = new Date() }) {
+export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2, cloud = false, registry = [], chosen = [], usingDefault = false, tasksByRepo = {}, activity = {}, access = {}, waiting = 0, now = new Date() }) {
   const quota = quotaView({ rateLimit, decision, reserve, cloud, now });
 
   const isChosen = (repo, project) => chosen.some((c) => c === repo || c === `${repo}#${project}`);
@@ -92,20 +96,27 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
       openTasks: reachable ? open.length : null,
       examples: open.slice(0, 3).map((r) => r.title),
       unreachable: reachable ? undefined : rows?.error || 'not checked',
+      // False only when asked and refused: work done for this project could not be submitted from here.
+      canSubmit: access[p.repo]?.ok !== false,
+      cannotSubmitReason: access[p.repo]?.ok === false ? access[p.repo].reason : undefined,
       _open: open,
     };
   });
   projects.sort((a, b) => Number(b.chosen) - Number(a.chosen) || (b.openTasks ?? -1) - (a.openTasks ?? -1) || a.name.localeCompare(b.name));
 
   const mine = projects.filter((p) => p.chosen);
-  const withWork = mine.find((p) => p._open.length);
+  // A project counts only if what is done for it can be submitted: nobody's quota goes into a
+  // task that would have nowhere to go.
+  const withWork = mine.find((p) => p._open.length && p.canSubmit);
+  const stuck = withWork ? null : mine.find((p) => p._open.length && !p.canSubmit) || (mine.length && mine.every((p) => p.unreachable) ? mine[0] : null);
+  const blocked = stuck ? { project: stuck.id, reason: stuck.cannotSubmitReason || `the project could not be reached (${stuck.unreachable})` } : null;
   const next = withWork
     ? { project: withWork.id, projectName: withWork.name, task: withWork._open[0].ref, title: withWork._open[0].title, size: withWork._open[0].size, sizeWord: SIZE_WORD[withWork._open[0].size] || 'unsized' }
     : null;
-  const elsewhere = projects.find((p) => !p.chosen && p.openTasks);
-  const suggestion = !next && elsewhere ? { project: elsewhere.id, name: elsewhere.name, reason: `Nothing open in your project${mine.length === 1 ? '' : 's'}. ${elsewhere.name} has ${elsewhere.openTasks}.` } : null;
+  const elsewhere = projects.find((p) => !p.chosen && p.openTasks && p.canSubmit);
+  const suggestion = !next && !blocked && elsewhere ? { project: elsewhere.id, name: elsewhere.name, reason: `Nothing open in your project${mine.length === 1 ? '' : 's'}. ${elsewhere.name} has ${elsewhere.openTasks}.` } : null;
 
-  const plan = !quota.go ? 'Nothing spent.' : next ? `${next.projectName}: ${shortTitle(next.title)}` : suggestion ? suggestion.reason : 'Nothing open. Nothing spent.';
+  const plan = !quota.go ? 'Nothing spent.' : blocked ? 'Cannot submit from here. Nothing spent.' : next ? `${next.projectName}: ${shortTitle(next.title)}` : suggestion ? suggestion.reason : 'Nothing open. Nothing spent.';
 
   // Other agents on the same project right now: finishing = work submitted and waiting for a
   // review, working = a live claim with nothing submitted yet. Real counts, or it says so.
@@ -127,9 +138,11 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
   const willRun = Boolean(quota.go && next);
   const steps = !quota.go
     ? [crowd, quota.line, 'Nothing spent']
-    : !next
-      ? [crowd, quota.line, 'Nothing open, nothing spent']
-      : [crowd, quota.line, boost, `Claim task: ${shortTitle(next.title)}`, 'Agent writes the change', 'Checks run in sandbox', 'Pull request opens'];
+    : blocked
+      ? ['Cannot submit from here', 'No task started, nothing spent']
+      : !next
+        ? [crowd, quota.line, 'Nothing open, nothing spent']
+        : [crowd, quota.line, boost, `Claim task: ${shortTitle(next.title)}`, 'Agent writes the change', 'Checks run in sandbox', 'Pull request opens'];
 
   const choice = (p) => ({
     id: p.id,
@@ -141,7 +154,7 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
     current: p.chosen,
   });
 
-  const others = projects.filter((p) => !p.chosen && p.openTasks);
+  const others = projects.filter((p) => !p.chosen && p.openTasks && p.canSubmit);
   const text = [...steps];
   if (others.length) text.push(`Also open: ${short(others[0].name, 28)} (${others[0].openTasks})${others.length > 1 ? `, +${others.length - 1}` : ''}`);
 
@@ -149,6 +162,10 @@ export function buildBriefing({ rateLimit = null, decision = null, reserve = 0.2
     quota,
     plan,
     willRun,
+    // Set when the chosen project has work but this session could not submit it. The run must
+    // not start, by any route; `reason` is for one line of report, not for the user to act on.
+    blocked,
+    waiting,
     agents: seen,
     steps,
     next,
@@ -168,6 +185,8 @@ const STAGES = [
   [/Verifying in (\w+) sandbox/, 6, 'Running checks in sandbox'],
   [/Agent (\w+) working \(attempt (\d+)/, 5, (m) => `Agent ${m[1]} writing, attempt ${m[2]}`],
   [/Claiming (\S+?):/, 4, (m) => `Claiming ${m[1]}`],
+  [/Work kept:/, 7, 'Kept, goes out next run', true],
+  [/Cannot submit from here/, 2, 'Cannot submit from here, nothing spent', true],
   [/Not donating now/, 2, 'Reserve reached, nothing spent', true],
   [/Checking your quota/, 2, 'Checking quota'],
   [/Syncing /, 1, 'Syncing the project'],

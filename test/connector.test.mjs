@@ -62,7 +62,7 @@ test.before(() => {
     path.join(seed, '.swarm/projects/demo/project.json'),
     JSON.stringify({ name: 'Demo', paths: ['src/**'], protect: ['check.mjs'], verify: [{ name: 'check', run: 'node check.mjs' }], review: { quorum: 1 } }),
   );
-  for (const t of ['one', 'two', 'three']) write(path.join(seed, `.swarm/projects/demo/tasks/${t}.md`), `---\ntitle: Add module ${t}\nsize: S\n---\nCreate src/${t}.mjs exporting a function.\n`);
+  for (const t of ['one', 'two', 'three', 'four', 'five']) write(path.join(seed, `.swarm/projects/demo/tasks/${t}.md`), `---\ntitle: Add module ${t}\nsize: S\n---\nCreate src/${t}.mjs exporting a function.\n`);
   write(path.join(seed, 'check.mjs'), "import fs from 'node:fs';\nfor (const f of fs.readdirSync('src')) { const m = await import('./src/' + f); if (typeof Object.values(m)[0] !== 'function') process.exit(1); }\n");
   write(path.join(seed, 'src/index.mjs'), 'export const main = () => 1;\n');
   write(path.join(seed, 'README.md'), 'needle in the readme\n');
@@ -81,7 +81,7 @@ test.after(() => {
 const refs = (prefix) => sh('git', ['for-each-ref', '--format=%(refname)', prefix], remote).split('\n').filter(Boolean);
 
 test('protocol: initialize, tool list, unknown method, notification', async () => {
-  const c = connect('proto');
+  const c = connect('proto', { SWARM_REPO: remote });
   const init = await c.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } });
   assert.equal(init.result.protocolVersion, '2025-06-18');
   assert.equal(init.result.serverInfo.name, 'swarm');
@@ -91,6 +91,9 @@ test('protocol: initialize, tool list, unknown method, notification', async () =
   assert.equal((await c.request('nope/nope')).error.code, -32601);
   const status = await c.call('swarm_status');
   assert.match(status.worker.id, /^[0-9a-f]{16}$/);
+  // The status says whether a finished task could be submitted from here, before any is started.
+  assert.deepEqual(status.canSubmit, { ok: true, route: 'direct' });
+  assert.equal(status.waitingToSubmit, 0);
   c.close();
 });
 
@@ -216,8 +219,9 @@ test('shell mode: an agent with its own tools edits the clone, Swarm verifies an
   };
   // The skill runs doctor first and stops if it fails. In a cloud session the VM is the
   // sandbox, so doctor must not apply its isolation self-test there (a real cloud run failed on it).
-  const doctor = spawnSync(process.execPath, [BIN, 'doctor'], { env, encoding: 'utf8' });
+  const doctor = spawnSync(process.execPath, [BIN, 'doctor', '--repo', remote], { env, encoding: 'utf8' });
   assert.match(doctor.stdout + doctor.stderr, /✓ sandbox: cloud-vm/);
+  assert.match(doctor.stdout + doctor.stderr, /✓ can submit to /);
   assert.doesNotMatch(doctor.stdout + doctor.stderr, /✗ sandbox/);
   const begun = swarm(['task', 'begin', '--repo', remote, '--task', 'demo/two', '--agent', 'cloud-session']);
   assert.equal(begun.json.task, 'demo/two', begun.err);
@@ -244,6 +248,92 @@ test('shell mode: an agent with its own tools edits the clone, Swarm verifies an
   assert.equal(receipt.agent.runner, 'shell:cloud-session');
   assert.equal(receipt.signer.handle, 'cloud-test');
   assert.equal(receipt.sandbox, 'cloud-vm');
+});
+
+test('no task is started where its result could not be submitted', () => {
+  // What happened in a real session: a shell with a dead GitHub login did a whole task, then had
+  // nowhere to send it and handed the user patch files. Swarm now finds out first.
+  const home = path.join(tmp, 'noaccess');
+  const env = { ...process.env, ...GIT_ENV, NO_COLOR: '1', SWARM_HOME: home, CLAUDE_CODE_REMOTE: 'true', SWARM_HANDLE: 'noaccess-test' };
+  const swarm = (args) => {
+    const r = spawnSync(process.execPath, [BIN, ...args], { env, encoding: 'utf8' });
+    return { code: r.status, out: r.stdout + r.stderr, json: () => JSON.parse(r.stdout) };
+  };
+  assert.equal(swarm(['tasks', '--repo', remote, '--json']).code, 0); // makes the local mirror
+  // Reading still works; pushing does not.
+  sh('git', ['config', 'remote.origin.pushurl', path.join(tmp, 'nowhere.git')], path.join(home, 'repos', 'local-remote'));
+  const claimsBefore = refs('refs/swarm/claims').length;
+
+  assert.match(swarm(['doctor', '--repo', remote]).out, /✗ can submit to /);
+
+  const brief = swarm(['brief', '--json', '--no-quota', '--repo', remote]).json();
+  assert.equal(brief.willRun, false);
+  assert.deepEqual(brief.steps, ['Cannot submit from here', 'No task started, nothing spent']);
+  assert.match(brief.blocked.reason, /refused a push/);
+
+  const begun = swarm(['task', 'begin', '--repo', remote, '--task', 'demo/four', '--agent', 'cloud-session']).json();
+  assert.equal(begun.session, null);
+  assert.equal(begun.blocked, true);
+  assert.match(begun.message, /Cannot submit from this session: .*Do not do the task another way.*do not ask the user to run commands/);
+
+  const ran = swarm(['run', '--repo', remote, '--task', 'demo/four', '--runner', 'mock']);
+  assert.match(ran.out, /Cannot submit from here: .*No task was started/);
+  assert.doesNotMatch(ran.out, /Agent mock working|Claiming/);
+
+  // Nothing was claimed, and no work directory was made.
+  assert.equal(refs('refs/swarm/claims').length, claimsBefore);
+  assert.equal(fs.existsSync(path.join(home, 'work')), false);
+});
+
+test('verified work that cannot be submitted is kept and goes out by itself on the next run', () => {
+  const home = path.join(tmp, 'held');
+  const env = { ...process.env, ...GIT_ENV, NO_COLOR: '1', SWARM_HOME: home, CLAUDE_CODE_REMOTE: 'true', SWARM_HANDLE: 'held-test' };
+  const swarm = (args) => {
+    const r = spawnSync(process.execPath, [BIN, ...args], { env, encoding: 'utf8' });
+    return { code: r.status, json: r.stdout.trim() ? JSON.parse(r.stdout) : null, err: r.stderr };
+  };
+  const outbox = () => (fs.existsSync(path.join(home, 'outbox')) ? fs.readdirSync(path.join(home, 'outbox')) : []);
+  const submitted = (task) => refs('refs/heads/swarm').filter((r) => r.includes(`/${task}/`));
+
+  const begun = swarm(['task', 'begin', '--repo', remote, '--task', 'demo/four', '--agent', 'cloud-session']);
+  assert.equal(begun.json.task, 'demo/four', begun.err);
+  fs.writeFileSync(path.join(begun.json.workDir, 'src/four.mjs'), 'export const four = () => 4;\n');
+
+  // The project goes out of reach after the work is done: it takes no submissions for a while.
+  const hook = path.join(remote, 'hooks', 'pre-receive');
+  write(hook, '#!/bin/sh\nwhile read old new ref; do case "$ref" in refs/heads/swarm/*) echo "down for maintenance" >&2; exit 1;; esac; done\n');
+  fs.chmodSync(hook, 0o755);
+
+  const kept = swarm(['task', 'finish', '--session', begun.json.session, '--summary', 'Added src/four.mjs.']);
+  assert.equal(kept.code, 0, kept.err);
+  assert.equal(kept.json.ok, true);
+  assert.equal(kept.json.held, true);
+  assert.match(kept.json.note, /submits it at the start of its next run.*nothing for you or the user to do/);
+  assert.equal(kept.json.where, undefined);
+  assert.equal(submitted('four').length, 0);
+  assert.equal(outbox().length, 1);
+  assert.ok(fs.existsSync(begun.json.workDir));
+  // Asking again gives the same answer instead of redoing or losing anything.
+  assert.equal(swarm(['task', 'finish', '--session', begun.json.session, '--summary', 'x']).json.held, true);
+
+  // Still out of reach on the next run: the work keeps waiting, and the new task goes ahead.
+  const next = swarm(['task', 'begin', '--repo', remote, '--task', 'demo/five', '--agent', 'cloud-session']);
+  assert.equal(next.json.task, 'demo/five', next.err);
+  assert.equal(next.json.earlierWorkSubmitted, undefined);
+  assert.equal(outbox().length, 1);
+  swarm(['task', 'abandon', '--session', next.json.session, '--reason', 'test']);
+
+  // Back in reach: the next run submits the kept work first, with its signed receipt, unasked.
+  fs.rmSync(hook);
+  const later = swarm(['task', 'begin', '--repo', remote, '--task', 'demo/five', '--agent', 'cloud-session']);
+  assert.equal(later.json.task, 'demo/five', later.err);
+  assert.deepEqual(later.json.earlierWorkSubmitted.map((x) => x.task), ['demo/four']);
+  assert.equal(outbox().length, 0);
+  assert.equal(fs.existsSync(begun.json.workDir), false);
+  const [branch] = submitted('four');
+  const receiptFile = sh('git', ['diff', '--name-only', `${branch}~1`, branch], remote).trim();
+  assert.equal(JSON.parse(sh('git', ['show', `${branch}:${receiptFile}`], remote)).signer.handle, 'held-test');
+  swarm(['task', 'abandon', '--session', later.json.session, '--reason', 'test']);
 });
 
 test('a key supplied by the environment signs as the same worker everywhere', () => {

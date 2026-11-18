@@ -77,6 +77,16 @@ export class GitBoard {
     await run('git', ['push', '--quiet', `--force-with-lease=${handle.ref}:${handle.sha}`, 'origin', `:${handle.ref}`], { cwd: this.mirror.dir });
   }
 
+  /** Can work done here be submitted? A push that sends nothing answers it. See GitHubBoard.access. */
+  async access() {
+    const res = await run('git', ['push', '--dry-run', '--quiet', 'origin', `${this.mirror.base}:refs/heads/swarm/access-check`], {
+      cwd: this.mirror.dir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      timeoutMs: 60_000,
+    });
+    return res.code === 0 ? { ok: true, route: 'direct' } : { ok: false, reason: `the project's git remote refused a push (${(res.stderr || '').trim().split('\n')[0] || 'no reason given'})` };
+  }
+
   branchFor(task) {
     return `swarm/${task.ref}/${this.identity.id.slice(0, 8)}`;
   }

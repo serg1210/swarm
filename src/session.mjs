@@ -17,6 +17,7 @@ import { makeWorkDir } from './repo.mjs';
 import { openRepo } from './open.mjs';
 import { requiredQuorum } from './quorum.mjs';
 import { buildPrompt, openTasks, sealWork, record } from './worker.mjs';
+import { hold, flushOutbox } from './outbox.mjs';
 
 export const MAX_FINISH_ATTEMPTS = 3;
 const MAX_READ_BYTES = 256 * 1024;
@@ -73,8 +74,19 @@ export async function beginSession({ identity, targets, taskRef, agent, model, m
   }
   // Fail before claiming anything if this machine cannot verify.
   await sandboxMode();
+  // Work verified on an earlier run that could not be submitted then goes out first.
+  const earlier = await flushOutbox({ identity });
+  const sent = earlier.submitted.length ? { earlierWorkSubmitted: earlier.submitted } : {};
+  let blocked = null;
   for (const target of targets) {
     const { repo, mirror, board } = await openRepo(target.repo, identity);
+    // Nobody's quota goes into a task whose result could not be submitted from here. Asked
+    // before anything else touches the project, so a dead login gets this answer and no other.
+    const access = await board.access({ prepare: true });
+    if (!access.ok) {
+      blocked = access.reason;
+      continue;
+    }
     const claims = await board.claims(mirror.projects);
     const open = openTasks(mirror.projects, mirror.dir, claims, { projectId: target.project, taskRef, unpublished: board.unpublished }).filter((r) => r.state === 'open');
     if (!open.length) continue;
@@ -104,10 +116,15 @@ export async function beginSession({ identity, targets, taskRef, agent, model, m
     };
     ensureDir(dir());
     save(session);
-    return describe(session, pick.project, pick.task, board.hints?.(pick.task.ref));
+    return { ...describe(session, pick.project, pick.task, board.hints?.(pick.task.ref)), ...sent };
   }
-  return { session: null, message: taskRef ? `Task ${taskRef} is not open.` : 'No open tasks in the projects you chose right now.' };
+  if (blocked) return { session: null, blocked: true, ...sent, message: `${cannotSubmit(blocked)} Nothing was claimed and no quota was spent.` };
+  return { session: null, ...sent, message: taskRef ? `Task ${taskRef} is not open.` : 'No open tasks in the projects you chose right now.' };
 }
+
+/** What every caller is told when a session cannot submit: the reason, and to leave it there. */
+export const cannotSubmit = (reason) =>
+  `Cannot submit from this session: ${reason}. Stop here. Do not do the task another way, do not copy the repository yourself, and do not ask the user to run commands or apply patches: Swarm tries again on its next run.`;
 
 async function reopen(session, identity) {
   const ctx = await openRepo(session.repoSpec, identity, { at: session });
@@ -121,7 +138,8 @@ async function close(session, ctx, status, { failedStep, result }) {
   session.result = result;
   session.endedAt = new Date().toISOString();
   save(session);
-  if (status !== 'submitted') await ctx.board.release(session.claim, { failedStep }).catch(() => {});
+  // Held work keeps its claim (it lapses on its own) and its directory: the next run submits it.
+  if (status !== 'submitted' && status !== 'held') await ctx.board.release(session.claim, { failedStep }).catch(() => {});
   record({ repo: ctx.repo.slug, task: session.taskRef, status, usage: { costUsd: 0 }, runner: session.agent.runner, where: result?.where });
   if (status === 'submitted') fs.rmSync(session.workDir, { recursive: true, force: true });
   return result;
@@ -162,10 +180,18 @@ export async function finishSession(id, { identity, summary }) {
 
   const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0, turns: 0, durationMs: Date.now() - new Date(session.startedAt).getTime() };
   const receipt = await sealWork({ workDir: session.workDir, project, task, base: mirror.base, diff, agent: session.agent, usage, verify, sandbox, attempts: session.attempts + 1, identity });
-  const sub = await board.submit({ workDir: session.workDir, branch: session.workBranch, claim: session.claim, project, task, receipt, summary: String(summary || '').slice(0, 6000), approvalsNeeded: requiredQuorum(project, diff.files.map((f) => f.file)) });
-  return close(session, ctx, 'submitted', {
-    result: { ok: true, final: true, task: task.ref, where: sub.where, verified: verify.results.map((r) => r.name), filesChanged: diff.files.length, linesChanged: diff.lines, sandbox },
-  });
+  const done = { task: task.ref, verified: verify.results.map((r) => r.name), filesChanged: diff.files.length, linesChanged: diff.lines, sandbox };
+  const submission = { workDir: session.workDir, branch: session.workBranch, claim: session.claim, receipt, summary: String(summary || '').slice(0, 6000), approvalsNeeded: requiredQuorum(project, diff.files.map((f) => f.file)) };
+  let sub;
+  try {
+    sub = await board.submit({ ...submission, project, task });
+  } catch (err) {
+    hold({ ...submission, repoSpec: session.repoSpec, taskRef: task.ref, runner: session.agent.runner, usage, error: err });
+    return close(session, ctx, 'held', {
+      result: { ok: true, final: true, held: true, ...done, note: 'Verified and signed, but it could not be submitted right now. Swarm kept it and submits it at the start of its next run. There is nothing for you or the user to do: do not push it, copy it or make patches.' },
+    });
+  }
+  return close(session, ctx, 'submitted', { result: { ok: true, final: true, ...done, where: sub.where } });
 }
 
 export async function abandonSession(id, { identity, reason }) {

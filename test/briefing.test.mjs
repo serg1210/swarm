@@ -162,3 +162,39 @@ test('a project that is not in the registry still shows up once chosen', () => {
   assert.deepEqual(b.projects.map((p) => [p.id, p.name, p.description, p.chosen]), [['me/thing#app', 'My app', 'An app.', true]]);
   assert.equal(b.next.sizeWord, 'large');
 });
+
+test('no run where the result could not be submitted: nothing is spent, and nothing is asked of the user', () => {
+  const access = { 'acme/tools': { ok: false, reason: 'the GitHub login here is missing or expired' } };
+  const b = buildBriefing({ rateLimit, decision: { go: true }, registry, chosen: ['acme/tools#core'], tasksByRepo, access, now });
+  assert.equal(b.willRun, false);
+  assert.equal(b.next, null);
+  assert.deepEqual(b.blocked, { project: 'acme/tools#core', reason: 'the GitHub login here is missing or expired' });
+  assert.deepEqual(b.steps, ['Cannot submit from here', 'No task started, nothing spent']);
+  // It does not send the user to another project they could not submit to either.
+  assert.equal(b.suggestion, null);
+  assert.equal(b.projects.find((p) => p.id === 'acme/tools#core').canSubmit, false);
+  for (const line of [...b.steps, ...b.text]) assert.ok(line.split(/\s+/).length <= 7, line);
+
+  // Able to submit, or not asked: the run goes ahead as before.
+  assert.equal(buildBriefing({ rateLimit, decision: { go: true }, registry, chosen: ['acme/tools#core'], tasksByRepo, access: { 'acme/tools': { ok: true, route: 'fork' } }, now }).willRun, true);
+  assert.equal(buildBriefing({ rateLimit, decision: { go: true }, registry, chosen: ['acme/tools#core'], tasksByRepo, now }).blocked, null);
+
+  // A chosen project that cannot be reached at all is the same outcome, not "nothing open".
+  const lost = buildBriefing({ rateLimit, decision: { go: true }, registry, chosen: ['other/lib#main'], tasksByRepo, now });
+  assert.equal(lost.willRun, false);
+  assert.equal(lost.steps[0], 'Cannot submit from here');
+  assert.match(lost.blocked.reason, /could not be reached/);
+});
+
+test('a job that could not submit says so in a few words and is finished', () => {
+  const refused = jobProgress('› Syncing acme/tools\n› Checking your quota\n! Cannot submit from here: the GitHub login here is missing or expired. No task was started and no quota was spent on one.\n\nSession: 0 submitted, 0 failed, $0.00 API-equivalent quota used.');
+  assert.deepEqual(refused, { step: 2, now: 'Cannot submit from here, nothing spent', done: true });
+  const kept = jobProgress('› Agent mock working (attempt 1/2, budget $3.00)\n› Verifying in seatbelt sandbox\n✓ Verified: check (1 files, 1 lines)\n! Work kept: core/small is verified but could not be submitted now (network down). Swarm submits it on the next run.');
+  assert.deepEqual(kept, { step: 7, now: 'Kept, goes out next run', done: true });
+});
+
+test('when the short window is the one at its reserve, the line gives that number', () => {
+  const tight = { status: 'allowed', weekly: { utilization: 0.67, resetsAt: '2026-11-21T00:00:00Z' }, fiveHour: { utilization: 0.83, resetsAt: '2026-11-18T04:00:00Z' } };
+  const b = buildBriefing({ rateLimit: tight, decision: { go: false, reason: '5-hour window is 83% used' }, reserve: 0.2, registry, chosen: ['acme/tools#core'], tasksByRepo, now });
+  assert.equal(b.steps[1], 'Quota: 83% used, reserve reached');
+});

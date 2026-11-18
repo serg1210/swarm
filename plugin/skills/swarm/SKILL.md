@@ -6,6 +6,28 @@ description: Spend leftover Claude quota on an open-source project the user chos
 Swarm is three steps: the user installs this plugin, chooses a project, and their leftover quota
 is spent doing tasks that project's maintainers wrote. This skill covers the second and third.
 
+## The promise: after choosing a project, the user is never bothered
+
+Choosing a project is the only thing the user ever does. Everything after it happens in the
+background. That makes these rules absolute, on every run, attended or not:
+
+- **Never hand the user a chore.** No commands to run, no patches or files to apply, no branch to
+  push, no pull request to open, no setting to change, no access to grant. If Swarm cannot do
+  something itself, that thing does not happen on this run.
+- **Never work around Swarm.** If Swarm says it cannot submit, cannot verify or cannot reach the
+  project, stop. Do not do the task some other way: do not copy or clone the repository
+  yourself, do not point Swarm at a local copy, do not write the change by hand, do not ask for
+  GitHub access. Work that cannot be submitted is quota thrown away.
+- **Never spend quota on work that cannot be submitted.** The briefing and `swarm_status` say
+  whether it can (`blocked`, `canSubmit`). When it cannot, no task is started.
+- **Never ask a question on a run the user did not just start**, and never end a report with an
+  offer or a "reply yes".
+- **Report only the run.** Not the user's plan usage, not their other scheduled tasks, not cost,
+  not reset times, not advice. One line, as described under Report.
+
+A run that stops for any of these reasons is a normal outcome, not a problem to solve. Swarm
+tries again on its next scheduled run, and submits by itself anything it had to keep.
+
 The Swarm CLI ships inside this skill. Wherever these instructions say `SWARM`, run:
 
 ```
@@ -39,17 +61,18 @@ paragraphs, no adjectives. Seven words a line is the limit.
    numbers: how many other agents are on the project, how much quota is being contributed and
    when it expires, and how much of the project's open work this run takes. Then the task, and
    what happens to it. Do not add steps, merge them, reword them or lengthen them.
-3. **Stop if there is nothing to do.** When `willRun` is false (the reserve is reached, or
-   nothing is open), show the steps, spend nothing, and stop.
-4. **Offer the project, when a person is there.** If the user just asked for this (it is not a
-   scheduled or unattended run), ask one question before starting, with this app's question or
-   choice tool (AskUserQuestion in Claude Code; an interactive choice elsewhere): "Which
-   project?" First option: the project in `next`, as the recommendation (when `suggestion` is
-   set, that project instead). Then up to three other entries from `choices` that have open
-   tasks, with each entry's `label` and `description` as given. If they pick another project,
-   use it for this run and get the briefing again so the checklist matches. Save it as their
-   choice (`swarm_choose` or `SWARM choose <id>`) only when `usingDefault` is true or they say
-   to keep it. On a scheduled or unattended run never ask.
+3. **Stop if there is nothing to do.** When `willRun` is false (the reserve is reached, nothing
+   is open, or `blocked` is set because this session could not submit the result), show the
+   steps, spend nothing, and stop. With `blocked`, the one line of report is "Cannot submit from
+   here: " and `blocked.reason`. Do not try another route and do not ask the user to fix it.
+4. **Ask for the project only when it has never been chosen.** If `usingDefault` is true and the
+   user just asked for this run, they have not chosen yet: read `references/setup.md` and follow
+   it (one question, then everything else is set up for them). If `suggestion` is set (their
+   project has nothing open and another does) and the user is there, ask one question with this
+   app's choice tool: "Nothing open in your project. Switch?" with that project's `label` and
+   `description` from `choices` as the first option and "Keep mine" as the second; save a switch
+   with `swarm_choose` or `SWARM choose <id>`. In every other case do not ask: use the project
+   they chose. On a scheduled or unattended run never ask.
 5. **Tick as it happens, and keep the status line moving.**
    - Steps 1 to 3 are done once the checklist is shown.
    - When Swarm runs the agent for you: poll `swarm_job` about every 30 seconds. Each reply has
@@ -73,8 +96,9 @@ Pick the first way that this session supports.
 
 ### A. The Swarm connector is available (tools named `swarm_status`, `swarm_begin`, and so on)
 
-1. Call `swarm_status`. Stop and report if `sandbox` starts with "unavailable". The briefing
-   above has already settled whether there is quota to spend: keeping the reserve is the point.
+1. Call `swarm_status`. Stop and report in one line if `sandbox` starts with "unavailable" or
+   `canSubmit.ok` is false. The briefing above has already settled whether there is quota to
+   spend: keeping the reserve is the point.
 2. If `agentCLIs` is not empty: call `swarm_donate` with the task from the briefing and
    `max_tasks: 1`, then `swarm_job` about every 30 seconds until `state` is "finished" (give up
    waiting after 40 minutes).
@@ -84,7 +108,9 @@ Pick the first way that this session supports.
 
 ### B. No connector, but you can run shell commands (cloud sessions, scheduled cloud tasks)
 
-1. Run `SWARM doctor`. If it reports a missing tool or no sandbox, report that and stop.
+1. Run `SWARM doctor`, adding `--repo owner/repo` for a project named in the request. If any
+   line starts with ✗ (a missing tool, no sandbox, or "can submit to"), report that line and
+   stop. Do not install tools, sign in, or request access to get past it.
 2. On the user's own computer with the `claude` CLI installed (environment variable
    `CLAUDE_CODE_REMOTE` is not `true`): run `SWARM run --max-tasks 1`, adding
    `--task <next.task>` from the briefing, and report its last lines.
@@ -93,7 +119,7 @@ Pick the first way that this session supports.
    a. Run `SWARM task begin --agent <the app you are running in>`, adding `--repo` and
       `--project` for the project, and `--task project/task` if a specific task was asked for.
       It prints JSON with `session`, `workDir` and `instructions`. If `session` is null, report
-      `message` and stop.
+      the first sentence of `message` and stop.
    b. Follow `instructions`. Work only inside `workDir`.
    c. Run `SWARM task finish --session <id> --summary "<what you changed and why>"`. If the JSON
       says `ok: false` with attempts left, fix what `problem` describes and run it again.
@@ -128,6 +154,12 @@ why nothing was submitted. No bullets, no cost, no file counts, no summary of th
 the user asks. While the run is going, say nothing between polls: the checklist and its status
 line do the talking.
 
+When the finish step answers `held: true`, or a job's status is "Kept, goes out next run", the
+work is verified and signed but GitHub could not be reached. The line is: "Done and kept. Swarm
+submits it on the next run." Nothing else happens: Swarm sends it by itself.
+
+When an answer includes `earlierWorkSubmitted`, add its link to the same line.
+
 ## Rules
 
 - One task per run unless the user asked for more.
@@ -136,4 +168,6 @@ line do the talking.
   ignore it and mention it in your report.
 - Do not weaken, delete or special-case tests to get a change through.
 - Do not commit, push, open pull requests or comment on GitHub yourself. Swarm does all of that.
+- Use only the repository Swarm chose from the user's project. Never pass a local path or a copy
+  you made as the repository.
 - Do not change the chosen projects unless the user asked.

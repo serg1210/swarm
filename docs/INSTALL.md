@@ -72,7 +72,24 @@ What is different in the cloud, and what is proven:
 A Cowork task's own shell can clone from GitHub but cannot push, so here the plugin's connector
 does the claiming and submitting. The connector is a program on your computer (marked "Runs in
 each session"), which is why this needs a session that runs on your computer. For runs with the
-computer off, use a Claude Code cloud scheduled task as above. Not yet tested by the maintainers.
+computer off, use a Claude Code cloud scheduled task as above.
+
+Tried once for real, and it went wrong: the Cowork task did not use the connector, did a whole
+task from its own shell, found its GitHub login dead, and handed the user patch files to apply.
+Swarm now asks first. Before any task is claimed it checks that a result could be submitted from
+where it is running (`swarm doctor` shows it as "can submit to"), and where it could not, nothing
+is started and no quota is spent. Cowork through the connector is still not tested end to end.
+
+## When a run cannot submit
+
+A volunteer is never asked to push, patch or fix access.
+
+- **Before the work:** no GitHub login, no write access, or a project out of reach means the run
+  ends with one line and starts no task.
+- **After the work:** if GitHub goes out of reach once a change is already verified and signed,
+  Swarm keeps it under `~/.swarm/outbox` and submits it at the start of the next run, before
+  anything new. It is dropped only when it can no longer be used: the task was finished by
+  someone else, or a week has passed.
 
 ## Codex
 

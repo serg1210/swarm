@@ -54,7 +54,8 @@ Maintain an open-source project? [Adopting Swarm in your repository](docs/ADOPTI
 > **Status: v0.3.** Tested end to end: the Claude Code and Codex runners, Hermes through the
 > connector, the macOS, Linux (bubblewrap) and Docker sandboxes, installing from the plugin
 > marketplace, a Claude Code cloud scheduled task, and the GitHub flow both with push access and from a fork.
-> Not yet tested: Cowork, and Codex as a connector host. See [Known limits](#known-limits).
+> Not yet tested: Codex as a connector host. Cowork was tried once and could not submit; Swarm now
+> checks that before it starts a task. See [Known limits](#known-limits).
 
 ## Without the plugin
 
@@ -249,6 +250,10 @@ check on your default branch and allow merge commits. Run `swarm sync` after mer
 
 ## Known limits
 
+- **Submitting needs a GitHub login where Swarm runs.** A volunteer's own computer with `gh`
+  logged in, or a Claude Code cloud session with the repository attached. Where there is none
+  (a Cowork task's own shell, for one), Swarm starts no task and says so in one line. There is no
+  way yet to contribute without a GitHub account.
 - **Not peer-to-peer.** Coordination is git and GitHub pull requests. There is no Swarm server
   either. A plain-git board (claims as compare-and-swap refs) exists for other forges and is what
   the test suite uses.
