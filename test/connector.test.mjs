@@ -94,6 +94,29 @@ test('protocol: initialize, tool list, unknown method, notification', async () =
   c.close();
 });
 
+test('briefing: what the host shows before anything is spent', async () => {
+  const c = connect('brief');
+  assert.ok((await c.request('tools/list')).result.tools.some((t) => t.name === 'swarm_brief'));
+  const b = await c.call('swarm_brief', { repo: remote, probe_quota: false });
+  assert.equal(b.quota.known, false);
+  assert.equal(typeof b.quota.headline, 'string');
+  const demo = b.projects.find((p) => p.id === `${remote}#demo`);
+  assert.equal(demo.name, 'Demo');
+  assert.equal(demo.chosen, true);
+  assert.ok(demo.openTasks >= 1);
+  assert.match(b.next.task, /^demo\//);
+  assert.equal(b.steps.length, 6);
+  assert.ok(b.steps[1].startsWith('Project: Demo'));
+  assert.ok(b.steps.every((line) => line.split(/\s+/).length <= 7));
+  assert.ok(b.choices.some((ch) => ch.id === demo.id && ch.current));
+  assert.ok(b.text.length >= 2);
+  // The task it names is one the run can be told to do.
+  const begun = await c.call('swarm_begin', { repo: remote, task: b.next.task, agent: 'test-host' });
+  assert.equal(begun.task, b.next.task);
+  await c.call('swarm_abandon', { session: begun.session, reason: 'test' });
+  c.close();
+});
+
 test('connector mode: confined file tools, verifier feedback, signed submission', async () => {
   const c = connect('host');
   const begun = await c.call('swarm_begin', { repo: remote, task: 'demo/one', agent: 'test-host', model: 'none' });
