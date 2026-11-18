@@ -57,6 +57,24 @@ export async function reverify({ repo, mirror, head, sandbox, projects, runCheck
   return { ...check, base, verify, workDir };
 }
 
+/**
+ * Has this worker already reviewed the change a submission carries now?
+ *
+ * A submission's head is its receipt commit, and a review names the work commit under it, so
+ * the two are never the same hash: compare with the head's parent. A review that only claims
+ * to be this worker's does not count, or a forged one could keep a real review from happening.
+ */
+export async function alreadyReviewed({ board, mirror, identity }, sub) {
+  let work;
+  try {
+    const head = await board.fetchSubmission(sub);
+    work = (await git(mirror.dir, ['rev-parse', '--verify', '--quiet', `${head}^`])).trim();
+  } catch {
+    return false; // not something we can name; the review step will say what is wrong with it
+  }
+  return (await board.reviews(sub)).some((r) => r.kind === 'review' && r.signer?.id === identity.id && r.work === work && verifyDoc(r).ok);
+}
+
 export async function reviewSubmission({ repo, mirror, board, identity, runner, sub, opts }) {
   step(`Reviewing ${c.bold(sub.taskRef)} from worker ${sub.worker} (${sub.id})`);
   const head = await board.fetchSubmission(sub);

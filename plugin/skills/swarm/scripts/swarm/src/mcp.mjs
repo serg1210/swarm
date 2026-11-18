@@ -194,7 +194,7 @@ export const TOOLS = [
   },
   {
     name: 'swarm_tasks',
-    description: 'List tasks and their state (open, claimed, done, unpublished) in the chosen projects or in one repository.',
+    description: 'List tasks and their state (open, claimed, done, unpublished, or stuck after repeated rejections in review) in the chosen projects or in one repository.',
     inputSchema: S({ repo: REPO, project: str('Only this project id.') }),
     readOnly: true,
     async run(a) {
@@ -203,7 +203,7 @@ export const TOOLS = [
       for (const t of targets(a, loadConfig())) {
         const { repo, mirror, board } = await openRepo(t.repo, id);
         const claims = await board.claims(mirror.projects);
-        for (const r of openTasks(mirror.projects, mirror.dir, claims, { projectId: t.project, unpublished: board.unpublished })) {
+        for (const r of openTasks(mirror.projects, mirror.dir, claims, { projectId: t.project, unpublished: board.unpublished, rejected: board.rejected })) {
           rows.push({ repository: repo.github || repo.url, task: r.task.ref, title: r.task.title, size: r.task.size, state: r.state });
         }
       }
@@ -242,7 +242,7 @@ export const TOOLS = [
   },
   {
     name: 'swarm_maintain',
-    description: 'The maintainer\'s pass, as a background job: for every open submission in the project, re-test it, review it if it came from someone else, and merge it once it has the required independent approval. It never approves this worker\'s own submissions. Returns a job id; poll swarm_job. Needs an agent CLI and push access to the project.',
+    description: 'The maintainer\'s pass, as a background job: for every open submission in the project, re-test it, review it if it came from someone else, and merge it once it has the required independent approval. A submission that a maintainer\'s review rejected is closed, so its task is offered again. It never approves this worker\'s own submissions. Returns a job id; poll swarm_job. Needs an agent CLI and push access to the project.',
     inputSchema: S({ repo: REPO, model: str('Model name passed to the agent CLI.'), dry_run: { type: 'boolean', description: 'Review nothing and merge nothing; just report.' } }),
     async run(a) {
       await identity();

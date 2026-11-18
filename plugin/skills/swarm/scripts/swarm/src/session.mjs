@@ -88,7 +88,7 @@ export async function beginSession({ identity, targets, taskRef, agent, model, m
       continue;
     }
     const claims = await board.claims(mirror.projects);
-    const open = openTasks(mirror.projects, mirror.dir, claims, { projectId: target.project, taskRef, unpublished: board.unpublished }).filter((r) => r.state === 'open');
+    const open = openTasks(mirror.projects, mirror.dir, claims, { projectId: target.project, taskRef, unpublished: board.unpublished, rejected: board.rejected }).filter((r) => r.state === 'open');
     if (!open.length) continue;
     const pick = open[Math.floor(Math.random() * open.length)];
     const branch = board.branchFor(pick.task);

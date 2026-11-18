@@ -11,8 +11,8 @@ import { getRunner, detectRunners } from './runners/index.mjs';
 import { GitBoard } from './board/git.mjs';
 import { GitHubBoard } from './board/github.mjs';
 import { workOn, openTasks } from './worker.mjs';
-import { reviewSubmission } from './review.mjs';
-import { mergeIfReady } from './merge.mjs';
+import { reviewSubmission, alreadyReviewed } from './review.mjs';
+import { mergeIfReady, withdrawIfRejected } from './merge.mjs';
 import { checkSubmission, readLedger } from './receipt.mjs';
 import { git, runVerify, describeFailure } from './verify.mjs';
 import { leaderboard, renderLeaderboard } from './ledger.mjs';
@@ -49,7 +49,9 @@ ${c.bold('Maintainer')}
   swarm verify [--project <id>] [--task <id>]    run a project's verify steps on the current checkout
   swarm lint                                     check .swarm/projects manifests and task files
   swarm sync                                     open a log issue for each new task, close finished ones
-  swarm maintain                                 for an agent on a schedule: re-test, review and merge open submissions
+  swarm maintain                                 for an agent on a schedule: re-test, review and merge open submissions,
+                                                 and close rejected ones so their tasks open again
+  swarm reopen <project/task>                    offer a task again after too many rejected submissions parked it
   swarm merge <submission>                       re-verify, check review quorum, merge
   swarm ledger [--json]                          leaderboard from merged receipts
   swarm ci --base <sha>                          verification entry point for CI
@@ -202,7 +204,7 @@ export async function gatherBriefing({ args = {}, probeQuota = true, identity } 
       // never started, and so the reason given is this one rather than whatever fails next.
       access[spec] = await board.access();
       const claims = await board.claims(mirror.projects);
-      tasksByRepo[spec] = openTasks(mirror.projects, mirror.dir, claims, { unpublished: board.unpublished }).map((r) => ({
+      tasksByRepo[spec] = openTasks(mirror.projects, mirror.dir, claims, { unpublished: board.unpublished, rejected: board.rejected }).map((r) => ({
         project: r.project.id,
         projectName: r.project.name,
         projectDescription: r.project.description,
@@ -406,17 +408,18 @@ const commands = {
     for (const target of targets(args, loadConfig())) {
       const { mirror, board, repo } = await context(args, { needsIdentity: false, repoSpec: target.repo });
       const claims = await board.claims(mirror.projects);
-      const rows = openTasks(mirror.projects, mirror.dir, claims, { projectId: target.project, unpublished: board.unpublished });
+      const rows = openTasks(mirror.projects, mirror.dir, claims, { projectId: target.project, unpublished: board.unpublished, rejected: board.rejected });
       all.push(...rows.map((r) => ({ repo: repo.github || repo.url, ref: r.task.ref, title: r.task.title, size: r.task.size, state: r.state })));
       if (args.json) continue;
       for (const project of mirror.projects) {
         if (target.project && project.id !== target.project) continue;
         log(`\n${c.bold(project.name || project.id)} ${c.dim(`(${project.id})`)}  ${project.description || ''}`);
         for (const r of rows.filter((x) => x.project.id === project.id)) {
-          const tag = { open: c.green('open       '), claimed: c.yellow('claimed    '), done: c.dim('done       '), unpublished: c.dim('unpublished') }[r.state] || c.dim(r.state.padEnd(11));
+          const tag = { open: c.green('open       '), claimed: c.yellow('claimed    '), done: c.dim('done       '), unpublished: c.dim('unpublished'), stuck: c.red('stuck      ') }[r.state] || c.dim(r.state.padEnd(11));
           log(`  ${tag} ${r.task.ref.padEnd(30)} ${c.dim(`[${r.task.size}]`)} ${r.task.title}`);
         }
       }
+      if (rows.some((r) => r.state === 'stuck')) log(c.dim('\n  stuck: reviewers rejected several submissions for this task. A maintainer fixes the task, then runs `swarm reopen <project/task>`.'));
       if (rows.some((r) => r.state === 'unpublished')) log(c.dim('\n  unpublished: the task file is merged but has no log issue yet. A maintainer runs `swarm sync`.'));
     }
     if (args.json) log(JSON.stringify(all, null, 2));
@@ -458,7 +461,7 @@ const commands = {
       }
       while (total.submitted + total.failed + total.held < maxTasks) {
         const claims = await here.board.claims(here.mirror.projects);
-        const candidates = openTasks(here.mirror.projects, here.mirror.dir, claims, { projectId: target.project, taskRef: args.task, unpublished: here.board.unpublished }).filter((r) => r.state === 'open');
+        const candidates = openTasks(here.mirror.projects, here.mirror.dir, claims, { projectId: target.project, taskRef: args.task, unpublished: here.board.unpublished, rejected: here.board.rejected }).filter((r) => r.state === 'open');
         if (!candidates.length) {
           warn(args.task ? `Task ${args.task} is not open in ${target.repo}.` : `No open tasks in ${target.repo} right now.`);
           break;
@@ -516,8 +519,7 @@ const commands = {
     if (args.task) subs = subs.filter((s) => s.taskRef === args.task || String(s.id) === String(args.task));
     const todo = [];
     for (const s of subs) {
-      const mine = (await ctx.board.reviews(s)).some((r) => r.signer?.id === ctx.identity.id && r.work);
-      if (!mine || args.force) todo.push(s);
+      if (args.force || !(await alreadyReviewed(ctx, s))) todo.push(s);
     }
     if (!todo.length) return warn('Nothing to review.');
     const max = Number(args['max-tasks'] ?? 1);
@@ -542,18 +544,18 @@ const commands = {
    * The maintainer's pass, for an agent to run on a schedule: for every open submission,
    * re-test it, review it if it is someone else's and not yet reviewed by this worker, and merge
    * it once the project's rules are met. Nothing here lets a worker approve its own submission.
+   * A submission that a maintainer's review rejected is closed, so its task is offered again.
    */
   async maintain(args) {
     const ctx = await context(args);
     const runner = await pickRunner(args, ctx.config);
     const subs = (await ctx.board.submissions()).slice(0, Number(args.max ?? 5));
     if (!subs.length) return ok('No open submissions.');
-    const done = { reviewed: 0, merged: 0, waiting: 0, refused: 0 };
+    const done = { reviewed: 0, merged: 0, waiting: 0, closed: 0, refused: 0 };
     for (const sub of subs) {
       let justVerified = false;
       try {
-        const reviewedByMe = (await ctx.board.reviews(sub)).some((r) => r.signer?.id === ctx.identity.id && r.work === sub.head);
-        if (!sub.mine && !reviewedByMe) {
+        if (!sub.mine && !(await alreadyReviewed(ctx, sub))) {
           const project = ctx.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
           const res = await reviewSubmission({ ...ctx, runner, sub, opts: await runOptions(args, ctx.config, project) });
           if (res.status === 'reviewed') done.reviewed++;
@@ -561,6 +563,7 @@ const commands = {
         }
         const res = await mergeIfReady(ctx, sub, { ...(await mergeOptions(ctx, sub, args)), runChecks: !justVerified });
         if (res.merged) done.merged++;
+        else if (res.rejected && !args['dry-run'] && (await withdrawIfRejected(ctx, sub, res)).withdrawn) done.closed++;
         else {
           warn(`${sub.taskRef} (${sub.id}): ${res.reason.split('\n')[0]}`);
           if (res.waiting) done.waiting++;
@@ -571,7 +574,18 @@ const commands = {
         fail(`${sub.taskRef} (${sub.id}): ${err.message.split('\n')[0]}`);
       }
     }
-    log(`\n${c.bold('Maintain')}: ${done.reviewed} reviewed, ${done.merged} merged, ${done.waiting} waiting for another reviewer, ${done.refused} not mergeable.`);
+    log(`\n${c.bold('Maintain')}: ${done.reviewed} reviewed, ${done.merged} merged, ${done.waiting} waiting for another reviewer, ${done.closed} closed after rejection, ${done.refused} not mergeable.`);
+  },
+
+  /** Maintainers: offer a task again after rejected submissions parked it. */
+  async reopen(args) {
+    const ref = args._[0];
+    if (!ref) throw new Error('Usage: swarm reopen <project/task>');
+    const ctx = await context(args);
+    const found = findTask(ctx.mirror.projects, ref);
+    if (!found) throw new Error(`No task "${ref}" in this repository.`);
+    await ctx.board.reopen(found.task);
+    ok(`Reopened ${found.task.ref}. Earlier rejections no longer count against it.`);
   },
 
   async lint() {

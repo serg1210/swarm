@@ -145,7 +145,10 @@ project, process submissions, or merge what came in: with the connector, call `s
 and poll `swarm_job`; with a shell, run `SWARM maintain`. For every open submission it re-tests
 the change, reviews it if it came from someone else, and merges it once it has the required
 independent approval. It never approves the user's own submissions; those wait for another
-worker. Report what it reviewed, merged and left waiting.
+worker. A submission that the user's own review rejected is closed, so its task is offered again.
+Report what it reviewed, merged, closed and left waiting. If it says a task is parked after too
+many rejections, tell the user to fix that task file and then run `SWARM reopen <project/task>`;
+do not run it yourself.
 
 ## Report
 

@@ -5,7 +5,18 @@
 //
 // A change needs the largest quorum among the base and every tier it touches. Tiers can only
 // raise the requirement, never lower it.
+//
+// The same block says how many submissions for one task may be rejected in review before the
+// task stops being offered to workers: "review": { "maxRejections": 3 }.
 import { matchesAny } from './util.mjs';
+
+const MAX_REJECTIONS = 3;
+
+/** How many rejected submissions park a task. Anything but a positive number means the default. */
+export function maxRejections(project) {
+  const n = Number(project?.review?.maxRejections);
+  return Number.isFinite(n) && n >= 1 ? n : MAX_REJECTIONS;
+}
 
 export function requiredQuorum(project, files = []) {
   const base = Number(project?.review?.quorum) || 1;
