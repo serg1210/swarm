@@ -11,7 +11,7 @@ import { getRunner, detectRunners } from './runners/index.mjs';
 import { GitBoard } from './board/git.mjs';
 import { GitHubBoard } from './board/github.mjs';
 import { workOn, openTasks } from './worker.mjs';
-import { reviewSubmission } from './review.mjs';
+import { reviewSubmission, alreadyReviewed } from './review.mjs';
 import { mergeIfReady, withdrawIfRejected } from './merge.mjs';
 import { checkSubmission, readLedger } from './receipt.mjs';
 import { git, runVerify, describeFailure } from './verify.mjs';
@@ -519,8 +519,7 @@ const commands = {
     if (args.task) subs = subs.filter((s) => s.taskRef === args.task || String(s.id) === String(args.task));
     const todo = [];
     for (const s of subs) {
-      const mine = (await ctx.board.reviews(s)).some((r) => r.signer?.id === ctx.identity.id && r.work);
-      if (!mine || args.force) todo.push(s);
+      if (args.force || !(await alreadyReviewed(ctx, s))) todo.push(s);
     }
     if (!todo.length) return warn('Nothing to review.');
     const max = Number(args['max-tasks'] ?? 1);
@@ -556,8 +555,7 @@ const commands = {
     for (const sub of subs) {
       let justVerified = false;
       try {
-        const reviewedByMe = (await ctx.board.reviews(sub)).some((r) => r.signer?.id === ctx.identity.id && r.work === sub.head);
-        if (!sub.mine && !reviewedByMe) {
+        if (!sub.mine && !(await alreadyReviewed(ctx, sub))) {
           const project = ctx.mirror.projects.find((p) => p.id === sub.taskRef.split('/')[0]);
           const res = await reviewSubmission({ ...ctx, runner, sub, opts: await runOptions(args, ctx.config, project) });
           if (res.status === 'reviewed') done.reviewed++;

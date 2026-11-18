@@ -379,7 +379,8 @@ export class GitHubBoard {
       if (!c.body?.includes(REVIEW_MARK) || (trustedOnly && !isTrusted(c))) continue;
       const m = /```json\n([\s\S]*?)\n```/.exec(c.body);
       try {
-        if (m) docs.push(JSON.parse(m[1]));
+        const doc = m ? JSON.parse(m[1]) : null;
+        if (doc && typeof doc === 'object') docs.push(doc); // `null` is valid JSON and would trip every reader
       } catch {
         /* malformed review comments are ignored */
       }

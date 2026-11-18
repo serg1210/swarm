@@ -179,7 +179,11 @@ test('a change to a rule file needs two different approving agents', () => {
   const first = maintain('bob');
   assert.match(first.out, /Review posted: approve/, first.out);
   assert.match(first.out, /demo\/change-rule .*Needs 2 independent approval\(s\); has 1/s);
-  assert.match(maintain('bob').out, /Needs 2 independent approval\(s\); has 1/);
+  // The second pass still re-tests the change, but does not spend a model run reading it again.
+  const again = maintain('bob');
+  assert.match(again.out, /Needs 2 independent approval\(s\); has 1/);
+  assert.doesNotMatch(again.out, /Review posted|Agent mock reading/, again.out);
+  assert.match(again.out, /0 reviewed/);
   assert.doesNotMatch(sh('git', ['ls-tree', '-r', '--name-only', 'main'], remote), /src\/rule\.mjs/);
 
   // A second, different worker's agent approves, and it merges.
