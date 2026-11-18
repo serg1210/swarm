@@ -1,0 +1,7 @@
+{
+  "task": "wrap",
+  "kind": "bad",
+  "plant": "off-by-one that the tests do not exercise",
+  "answer": "The length check forgets the space between words, so a line can be one character longer than width: wrap('aaa bbb', 6) returns one 7-character line.",
+  "key": "off.by.one|exceed|longer than (the )?(given |allowed )?`?width|too long|width ?\\+ ?1|one character|(the|joining|separating|separator) space|\\+ ?1\\b"
+}

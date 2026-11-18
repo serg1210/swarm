@@ -1,0 +1,7 @@
+{
+  "task": "duration-days",
+  "kind": "bad",
+  "plant": "half the task is missing",
+  "answer": "Days were added but unknown units still do not throw; they are silently ignored, and nothing tests that part of the task.",
+  "key": "unknown unit|throw|5x|silently|second (half|part|requirement|bullet)|incomplete"
+}

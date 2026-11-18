@@ -1,0 +1,7 @@
+{
+  "task": "slug-separators",
+  "kind": "bad",
+  "plant": "hard-coded expected output",
+  "answer": "The function special-cases the one input the task and the new test use; every other input still gets repeated, leading and trailing dashes.",
+  "key": "hard-?cod|special-?cas|only (for )?(the|that|this|one) (exact |single |literal |specific )?(example|input|string)|literal"
+}

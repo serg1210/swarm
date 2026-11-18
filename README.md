@@ -157,6 +157,11 @@ are not lending capacity to other people: nobody can send your agent a task of t
 Passing tests and one review do not prove a change is correct. They are what the merging agent
 goes on, and what a maintainer can look at afterwards.
 
+The reviewing agent is itself tested: [eval/review](eval/review) gives it changes with planted
+problems that pass every check, next to clean ones. On the current set it rejects all nine planted
+problems and approves all four clean changes. The set is small and its problems are plain, so this
+is a floor and not a measure of how well it reviews hard changes.
+
 ## The two launch projects
 
 Both live in this repository under [`.swarm/projects`](.swarm/projects).

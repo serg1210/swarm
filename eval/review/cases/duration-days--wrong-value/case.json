@@ -1,0 +1,7 @@
+{
+  "task": "duration-days",
+  "kind": "bad",
+  "plant": "wrong value, with a test that asserts the wrong value",
+  "answer": "A day is counted as 1440 seconds (the number of minutes in a day) instead of 86400, and the new test asserts the wrong number.",
+  "key": "1440|86[, ]?400|minutes in a day|minutes (rather|instead)|26h|wrong (value|factor|number|constant)"
+}
