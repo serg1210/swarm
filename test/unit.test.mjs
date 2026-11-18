@@ -245,6 +245,40 @@ test('prompt carries failure hints; unpublished tasks are not open', () => {
   assert.equal(openTasks([project], '/nonexistent', new Map())[0].state, 'open');
 });
 
+test('rejections: counted once per work commit, only from maintainers, until a maintainer reopens', () => {
+  const a = identity('a');
+  const b = identity('b');
+  const trusted = (entries) => entries.map((e) => ({ ...e, trusted: true }));
+  const reject = (id, work) => mark('reject', id, { work });
+  // A stranger can sign a reject marker, but it changes nothing.
+  const stranger = resolveClaims(log([reject(a, 'w1'), 5]), opts);
+  assert.equal(stranger.rejections, 0);
+  assert.deepEqual(stranger.failures, {});
+  // From a maintainer it counts, once per work commit, and reaches the next worker as a hint.
+  const twice = resolveClaims(trusted(log([reject(a, 'w1'), 9], [reject(b, 'w1'), 8], [reject(a, 'w2'), 7])), opts);
+  assert.equal(twice.rejections, 2);
+  assert.deepEqual(twice.failures, { review: 2 });
+  // A maintainer's reopen starts the count again; a stranger's does not.
+  assert.equal(resolveClaims(trusted(log([reject(a, 'w1'), 9], [mark('reopen', a), 8], [reject(a, 'w3'), 7])), opts).rejections, 1);
+  const mixed = [...trusted(log([reject(a, 'w1'), 9])), ...log([mark('reopen', b), 8])];
+  assert.equal(resolveClaims(mixed, opts).rejections, 1);
+  // A worker's claim outlives its submission, so the rejection ends that claim and no other.
+  const claims = trusted(log([mark('claim', a), 6], [mark('claim', b), 5], [mark('reject', a, { work: 'w1', worker: b.id }), 4]));
+  assert.deepEqual(resolveClaims(claims, opts).live.map((c) => c.worker), [a.id]);
+});
+
+test('a task is stuck after review.maxRejections rejected submissions, and the prompt says what "review" means', () => {
+  const task = { id: 'x', ref: 'core/x', title: 'T', body: 'B', paths: ['src/**'], verify: [], status: 'ready' };
+  const project = { id: 'core', protect: [], verify: [], replication: 1, tasks: [task] };
+  const state = (p, n) => openTasks([p], '/nonexistent', new Map(), { rejected: new Map([['core/x', n]]) })[0].state;
+  assert.equal(state(project, 2), 'open');
+  assert.equal(state(project, 3), 'stuck'); // the default
+  assert.equal(state({ ...project, review: { maxRejections: 1 } }, 1), 'stuck');
+  assert.equal(state({ ...project, review: { maxRejections: 'lots' } }, 2), 'open'); // nonsense means the default
+  assert.match(buildPrompt({ project, task, hints: { failures: { review: 1 } } }), /did not get past: review \(1x\)[\s\S]*another agent read a finished change and rejected it/);
+  assert.doesNotMatch(buildPrompt({ project, task, hints: { failures: { policy: 1 } } }), /another agent read/);
+});
+
 test('chosen projects decide where quota goes; --repo overrides', () => {
   assert.deepEqual(targets({}, { chosen: ['a/b', 'c/d#gtm'] }), [{ repo: 'a/b', project: undefined }, { repo: 'c/d', project: 'gtm' }]);
   assert.deepEqual(targets({ repo: 'x/y', project: 'core' }, { chosen: ['a/b'] }), [{ repo: 'x/y', project: 'core' }]);

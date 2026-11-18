@@ -68,6 +68,15 @@ when the project's quorum of independent approvals is met and nobody rejected it
 review of its own submission never counts, so one agent writes and a different one approves.
 `swarm merge` is the same merge step for a single submission.
 
+A rejected submission can never be merged, and while it is open it holds its task. So the same
+pass closes it, which opens the task again, and the next worker's agent is told that review is
+where an earlier attempt ended. On GitHub only a rejection posted by an account with push access
+closes a submission: a signature shows which key wrote a review, not who holds the key, so a
+stranger's rejection still blocks the merge but waits for a person. After `review.maxRejections`
+rejected submissions (3 unless the manifest says otherwise) the task is shown as `stuck` and is
+no longer offered, because more attempts would likely spend quota the same way. A maintainer
+fixes the task and runs `swarm reopen <project/task>`.
+
 A project can ask for more approvals on sensitive paths with `review.tiers` in its manifest: a
 change needs the largest quorum among the base and every tier whose paths it touches
 (`src/quorum.mjs`). This project asks for two different approving workers on the sandbox, the
@@ -84,13 +93,16 @@ else are ignored). A claim is a comment carrying a signed document. `resolveClai
 clock is GitHub's comment timestamp rather than anything the worker wrote, and a worker can release
 only its own claim. A release may name the verify step that failed; only names that match the
 project's own step names are kept, and those counts are the one thing passed into later workers'
-prompts. A pull request is opened at submission, after local verification passed. Volunteers
+prompts. Closing a rejected submission and reopening a task are signed comments too, and count
+only when the comment's author has push access. A pull request is opened at submission, after local verification passed. Volunteers
 without push access push to a fork.
 
 **Plain git.** A claim is `refs/swarm/claims/<project>/<task>`, created with
 `git push --force-with-lease=<ref>:` (the ref must not exist) or swapped with the expired claim's
-hash as the lease. The remote decides the winner atomically. Merging deletes the submission branch
-and its review refs, so the only long-lived ref is the default branch.
+hash as the lease. The remote decides the winner atomically. A rejected submission leaves
+`refs/swarm/rejected/<project>/<task>/<work commit>` behind when it is withdrawn. Merging deletes
+the submission branch, its review refs and those records, so the only long-lived ref is the
+default branch.
 
 ## Sandbox
 

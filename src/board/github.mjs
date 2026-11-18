@@ -15,6 +15,9 @@
 //                failed. Later workers are told which checks tripped others up.
 //   submission   a pull request, opened only after verification passed on the worker's machine
 //   review       a pull request comment carrying a signed review document
+//   reject       a signed comment on the task issue by someone with push access, written when a
+//                rejected pull request is closed. The task opens again; after the project's
+//                `review.maxRejections` of these it is parked until a maintainer posts `reopen`.
 //
 // Volunteers without push access work from their own fork.
 import { must, run } from '../util.mjs';
@@ -22,12 +25,15 @@ import { signDoc, verifyDoc } from '../identity.mjs';
 import { git } from '../verify.mjs';
 
 const TITLE = /^\[swarm\] ([a-z0-9-]+)\/([a-z0-9-]+)/;
-const MARK = /<!-- swarm:(claim|release) ([A-Za-z0-9+/=]+) -->/;
+const MARK = /<!-- swarm:(claim|release|reject|reopen) ([A-Za-z0-9+/=]+) -->/;
 const REVIEW_MARK = '<!-- swarm:review -->';
 const WORKER_MARK = /<!-- swarm:worker ([0-9a-f]{16}) -->/;
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 const encode = (doc) => Buffer.from(JSON.stringify(doc)).toString('base64');
+
+/** Was this issue or comment written by someone with push access, or by the repository's own Actions bot? */
+const isTrusted = (n) => TRUSTED.has(n.author_association) || (n.user?.type === 'Bot' && n.user.login === 'github-actions[bot]');
 
 /** Parse a claim or release marker out of a comment body. Returns a verified doc or null. */
 export function parseMarker(body, taskRef) {
@@ -44,12 +50,16 @@ export function parseMarker(body, taskRef) {
 
 /**
  * Replay a task issue's comments, oldest first.
- * Returns the live claims in winning order and how often each verify step failed before.
- * Only signed markers count, and a worker can release only its own claim.
+ * Returns the live claims in winning order, how often each verify step failed before, and how
+ * many submissions were rejected in review since the task was last reopened.
+ * Only signed markers count, and a worker can release only its own claim. `reject` and `reopen`
+ * count only in a comment marked `trusted` (written by someone with push access): anyone can
+ * sign a marker, and these two decide whether a task is still offered to workers.
  */
 export function resolveClaims(comments, { taskRef, ttlMinutes, now = Date.now(), knownSteps = [] }) {
   let live = [];
   const failures = {};
+  let rejected = new Set(); // work commits, so one submission is never counted twice
   const steps = new Set([...knownSteps, 'policy', 'agent']);
   for (const c of comments) {
     const doc = parseMarker(c.body, taskRef);
@@ -59,13 +69,21 @@ export function resolveClaims(comments, { taskRef, ttlMinutes, now = Date.now(),
       const exp = new Date(c.createdAt).getTime() + ttlMinutes * 60_000;
       live = live.filter((x) => x.worker !== worker);
       if (exp > now) live.push({ worker, commentId: c.id, exp: new Date(exp).toISOString() });
-    } else {
+    } else if (doc.kind === 'release') {
       live = live.filter((x) => x.worker !== worker);
       // The step name is fed to other workers' agents, so it must be one we already know.
       if (steps.has(doc.failedStep)) failures[doc.failedStep] = (failures[doc.failedStep] || 0) + 1;
+    } else if (doc.kind === 'reject' && c.trusted) {
+      if (typeof doc.work === 'string') rejected.add(doc.work);
+      // A worker's claim is not released when it submits, so it would otherwise hold the task
+      // until it lapsed, long after the submission it stood for was closed.
+      live = live.filter((x) => x.worker !== doc.worker);
+    } else if (doc.kind === 'reopen' && c.trusted) {
+      rejected = new Set();
     }
   }
-  return { live, failures };
+  if (rejected.size) failures.review = rejected.size;
+  return { live, failures, rejections: rejected.size };
 }
 
 const CLOUD = process.env.CLAUDE_CODE_REMOTE === 'true';
@@ -73,6 +91,7 @@ const CLOUD = process.env.CLAUDE_CODE_REMOTE === 'true';
 export class GitHubBoard {
   kind = 'github';
   unpublished = new Set();
+  rejected = new Map(); // task ref -> submissions rejected in review since it was last reopened
 
   constructor({ repo, mirror, identity }) {
     this.repo = repo; // "owner/name"
@@ -195,18 +214,18 @@ export class GitHubBoard {
     for (const n of list) {
       if (n.pull_request) continue; // the issues endpoint also returns pull requests
       const m = TITLE.exec(n.title);
-      const trusted = TRUSTED.has(n.author_association) || (n.user?.type === 'Bot' && n.user.login === 'github-actions[bot]');
-      if (!m || !trusted) continue;
+      if (!m || !isTrusted(n)) continue;
       const ref = `${m[1]}/${m[2]}`;
       if (issues.has(ref)) continue; // the oldest issue for a task is the log
-      const comments = n.comments ? await this.api('GET', `${this.repoPath}/issues/${n.number}/comments?per_page=100`) : [];
-      issues.set(ref, {
-        number: n.number,
-        url: n.html_url,
-        comments: comments.map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at })),
-      });
+      issues.set(ref, { number: n.number, url: n.html_url, comments: n.comments ? await this.#log(n.number) : [] });
     }
     return issues;
+  }
+
+  /** The comments on a task issue, oldest first, each marked with whether a maintainer wrote it. */
+  async #log(number) {
+    const comments = await this.api('GET', `${this.repoPath}/issues/${number}/comments?per_page=100`);
+    return comments.map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at, trusted: isTrusted(c) }));
   }
 
   async #openPrs() {
@@ -237,6 +256,7 @@ export class GitHubBoard {
     this.issues = await this.#taskIssues();
     this.unpublished = new Set();
     this.failures = new Map();
+    this.rejected = new Map();
     const live = new Map();
     for (const project of projects) {
       for (const task of project.tasks) {
@@ -247,6 +267,7 @@ export class GitHubBoard {
         }
         const r = this.#resolve(project, task, issue);
         this.failures.set(task.ref, r.failures);
+        if (r.rejections) this.rejected.set(task.ref, r.rejections);
         if (r.live.length) live.set(task.ref, r.live.map((c) => ({ ...c, mine: c.worker === this.identity?.id })));
       }
     }
@@ -350,14 +371,16 @@ export class GitHubBoard {
     return { where: sub.url };
   }
 
-  async reviews(sub) {
+  /** Signed reviews posted on a submission. `trustedOnly` keeps those posted by someone with push access. */
+  async reviews(sub, { trustedOnly = false } = {}) {
     const comments = await this.api('GET', `${this.repoPath}/issues/${sub.id}/comments?per_page=100`);
     const docs = [];
     for (const c of comments) {
-      if (!c.body?.includes(REVIEW_MARK)) continue;
+      if (!c.body?.includes(REVIEW_MARK) || (trustedOnly && !isTrusted(c))) continue;
       const m = /```json\n([\s\S]*?)\n```/.exec(c.body);
       try {
-        if (m) docs.push(JSON.parse(m[1]));
+        const doc = m ? JSON.parse(m[1]) : null;
+        if (doc && typeof doc === 'object') docs.push(doc); // `null` is valid JSON and would trip every reader
       } catch {
         /* malformed review comments are ignored */
       }
@@ -368,11 +391,46 @@ export class GitHubBoard {
   async merge(sub) {
     // A merge commit keeps the work commit (and so the receipt's tree hash) in history.
     await this.api('PUT', `${this.repoPath}/pulls/${sub.id}/merge`, { merge_method: 'merge' });
-    // Leave no branch behind when the submission was pushed to this repository rather than a fork.
+    await this.#dropBranch(sub);
+    return { where: sub.url };
+  }
+
+  /** Leave no branch behind when the submission was pushed to this repository rather than a fork. */
+  async #dropBranch(sub) {
     if (sub.sameRepo && sub.branch?.startsWith('swarm/')) {
       await run('gh', ['api', '-X', 'DELETE', `${this.repoPath}/git/refs/heads/${sub.branch}`]);
     }
-    return { where: sub.url };
+  }
+
+  /**
+   * Close a submission that was rejected in review, so its task is offered again, and note the
+   * rejection in the task's log. Needs push access; returns null without it. The note is written
+   * first and counted once per work commit, so a pass that dies half way can simply run again.
+   * `worker` and `work` are the submitter and the work commit, as the signed receipt has them.
+   * Returns how many submissions for the task have been rejected since it was last reopened.
+   */
+  async withdraw(sub, { worker = sub.worker, work = sub.head } = {}) {
+    if (!(await this.canPush())) return null;
+    const issue = (await this.#taskIssues()).get(sub.taskRef);
+    let rejections = 0;
+    if (issue) {
+      const fields = { task: sub.taskRef, work, submission: sub.id, worker };
+      await this.#comment(issue, 'reject', fields, `Submission #${sub.id} from worker \`${worker}\` was rejected in review and closed. The task is open for another attempt.`);
+      rejections = resolveClaims(await this.#log(issue.number), { taskRef: sub.taskRef, ttlMinutes: 0 }).rejections;
+    }
+    const where = issue ? ` The task is open for another attempt (task log: #${issue.number}).` : '';
+    await this.api('POST', `${this.repoPath}/issues/${sub.id}/comments`, { body: `Closed by Swarm: a reviewer rejected this change, so it cannot be merged.${where}` });
+    await this.api('PATCH', `${this.repoPath}/pulls/${sub.id}`, { state: 'closed' });
+    await this.#dropBranch(sub);
+    return { where: sub.url, rejections };
+  }
+
+  /** Maintainers: offer a parked task to workers again. The count of rejections starts over. */
+  async reopen(task) {
+    if (!(await this.canPush())) throw new Error(`Reopening a task needs push access to ${this.repo}.`);
+    const issue = (await this.#taskIssues()).get(task.ref);
+    if (!issue) throw new Error(`${task.ref} has no open log issue. Run \`swarm sync\` first.`);
+    await this.#comment(issue, 'reopen', { task: task.ref }, 'Reopened by a maintainer. Earlier rejections no longer count against this task.');
   }
 
   /**

@@ -35,6 +35,7 @@ optional; the defaults are shown in brackets.
 - `limits` (`{ "maxFilesChanged": 40, "maxDiffLines": 2000 }`): a larger diff is rejected.
 - `review` (`{ "quorum": 1 }`): independent approvals a merge needs. Add `tiers` to ask for
   more on sensitive paths, for example `"tiers": [{ "paths": ["src/auth/**"], "quorum": 2 }]`.
+  `maxRejections` (`3`) is how many rejected submissions park a task until you reopen it.
 - `replication` (`1`): how many workers may hold a live claim on the same task at once.
 - `claimTtlMinutes` (`90`): when an unfinished claim lapses and the task reopens.
 - `sandbox` (none): `image` names a Docker image, used when neither macOS `sandbox-exec` nor
@@ -138,3 +139,9 @@ Only signed reviews for that exact work commit count, at most one per reviewer (
 never the submitter's own. Any rejection blocks the merge, and it needs at least `review.quorum`
 approvals. `--force` overrides both; read the reviews first. Passing tests and a review do not
 prove a change correct; you still decide what merges.
+
+`swarm maintain` does all of this for every open submission, and closes one that your own review
+(or another account with push access) rejected, so that its task is offered again. When
+`maxRejections` submissions for one task have been rejected, `swarm tasks` shows it as `stuck`
+and workers skip it: the task is probably unclear or its test too weak. Fix the task file, then
+run `swarm reopen <project/task>`.
