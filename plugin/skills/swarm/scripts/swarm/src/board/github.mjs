@@ -251,7 +251,7 @@ export class GitHubBoard {
     await this.#comment(handle.issue, 'release', { task: handle.task, failedStep }, text).catch(() => {});
   }
 
-  async submit({ workDir, branch, claim, project, task, receipt, summary }) {
+  async submit({ workDir, branch, claim, project, task, receipt, summary, approvalsNeeded }) {
     const { remote, owner } = await this.#pushRemote(workDir);
     await git(workDir, ['push', '--quiet', '--force', remote, `${branch}:refs/heads/${branch}`]);
     const body = [
@@ -268,7 +268,7 @@ export class GitHubBoard {
       `- verified locally in \`${receipt.sandbox}\` sandbox: ${receipt.verify.map((v) => `\`${v.name}\``).join(', ')}`,
       `- ${receipt.filesChanged} file(s), ${receipt.linesChanged} line(s) changed`,
       '',
-      `Merging needs ${project.review.quorum} independent \`swarm review\` approval(s) and a maintainer.`,
+      `Merging needs ${approvalsNeeded ?? project.review.quorum} approval(s) from other workers' agents (\`swarm review\` or \`swarm maintain\`).`,
       '',
       `<!-- swarm:worker ${this.identity.id} -->`,
     ].join('\n');

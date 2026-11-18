@@ -2,15 +2,19 @@
 // Codex applies its own OS sandbox: `workspace-write` confines writes to the work directory
 // and disables network access.
 //
-// STATUS: experimental. Written against the documented `codex exec --json` interface but not
-// yet exercised end to end by the maintainers. See .swarm/projects/core/tasks/ for the task
-// to harden it.
+// Unlike the Claude runner, which gets file tools only, Codex reads and edits through a shell
+// inside that sandbox. The prompt tells it not to run the project's code; nothing but Codex's
+// sandbox enforces that. Rate-limit windows are not read yet, so there is no quota reserve.
 import { run } from '../util.mjs';
 
 export const name = 'codex';
+/** Tells the prompt builder this agent works through a shell rather than file tools. */
+export const hasShell = true;
 
 export function buildArgs({ cwd, model, readOnly = false }) {
   const args = ['exec', '--json', '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--skip-git-repo-check', '--ignore-user-config', '-C', cwd];
+  // No web search and no ChatGPT apps: the task is done from the repository alone.
+  args.push('-c', 'web_search="disabled"', '--disable', 'apps');
   if (model) args.push('--model', model);
   args.push('-'); // read the prompt from stdin
   return args;

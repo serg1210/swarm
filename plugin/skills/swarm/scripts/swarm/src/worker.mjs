@@ -7,8 +7,9 @@ import { completedTasks, protectedGlobs, verifySteps, receiptPath } from './proj
 import { git, diffSummary, checkPolicy, runVerify, describeFailure } from './verify.mjs';
 import { buildReceipt } from './receipt.mjs';
 import { makeWorkDir } from './repo.mjs';
+import { requiredQuorum } from './quorum.mjs';
 
-export function buildPrompt({ project, task, feedback, hints, mode = 'cli', workDir, session }) {
+export function buildPrompt({ project, task, feedback, hints, mode = 'cli', workDir, session, agentShell = false }) {
   const cloud = process.env.CLAUDE_CODE_REMOTE === 'true';
   const steps = verifySteps(project, task);
   const lines = [
@@ -26,7 +27,9 @@ export function buildPrompt({ project, task, feedback, hints, mode = 'cli', work
       ? '- Read and change files only through the swarm_list, swarm_read, swarm_search, swarm_write, swarm_edit and swarm_delete tools. Do not run commands and do not use any other file or shell tool on this repository.'
       : mode === 'shell'
         ? `- The repository is checked out at ${workDir}. Read and change files only inside that directory. Do not commit, push, switch branches or touch its .git directory: Swarm does that.${cloud ? ' You may run the verify steps yourself in that directory to check your work.' : " Do not run the project's code yourself: the finish step runs the checks in a sandbox."}`
-        : '- You cannot run commands. Read the code carefully instead of guessing.',
+        : agentShell
+          ? "- Use your shell only to read and edit files in the current directory. It has no network, and you must not use web search. Do not run the project's code or its tests, and do not commit: Swarm runs the checks and commits. Read the code carefully instead of guessing."
+          : '- You cannot run commands. Read the code carefully instead of guessing.',
     '- When you finish, an automated verifier runs these steps in a sandbox with no network access:',
     ...steps.map((s) => `    - ${s.name}: ${s.run}`),
     '  If a step fails you get its output and one more attempt.',
@@ -122,7 +125,7 @@ export async function workOn({ repo, mirror, board, identity, runner, project, t
       const started = Date.now();
       const res = await runner.runAgent({
         cwd: workDir,
-        prompt: buildPrompt({ project, task, feedback, hints }),
+        prompt: buildPrompt({ project, task, feedback, hints, agentShell: Boolean(runner.hasShell) }),
         model: opts.model,
         effort: opts.effort,
         budgetUsd: opts.budgetUsd,
@@ -175,7 +178,7 @@ export async function workOn({ repo, mirror, board, identity, runner, project, t
       ok(`Dry run: nothing pushed. Result is in ${workDir}`);
       return { status: 'dry-run', usage, rateLimit, workDir, receipt };
     }
-    const sub = await board.submit({ workDir, branch, claim, project, task, receipt, summary });
+    const sub = await board.submit({ workDir, branch, claim, project, task, receipt, summary, approvalsNeeded: requiredQuorum(project, diff.files.map((f) => f.file)) });
     record({ repo: repo.slug, task: task.ref, status: 'submitted', usage, runner: runner.name, where: sub.where });
     ok(`Submitted ${c.bold(task.ref)} → ${sub.where}  ${c.dim(`(${fmtUsd(usage.costUsd)} API-equivalent, ${fmtDuration(usage.durationMs)})`)}`);
     fs.rmSync(workDir, { recursive: true, force: true });
