@@ -50,6 +50,14 @@
   .totals div { font: 13px var(--mono); color: var(--muted); }
   .totals b { display: block; font: 600 26px var(--sans); color: var(--ink); font-variant-numeric: tabular-nums; }
   .empty { color: var(--muted); font-style: italic; }
+  .copy { display: flex; align-items: center; gap: 8px; background: var(--term-bg); border-radius: 8px; padding: 10px 12px; margin: 8px 0 6px; max-width: 100%; }
+  .copy code { background: none; color: var(--term-ink); font-size: 14px; padding: 0; overflow-x: auto; white-space: nowrap; flex: 1; }
+  .copy button { font: 600 12px var(--mono); color: var(--term-bg); background: #6fdcae; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  .hint { display: block; color: var(--muted); font-size: 14px; }
+  .need { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 14px 0 6px; font-size: 15px; }
+  .card .count { font: 600 13px var(--mono); color: var(--accent); }
+  .card ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  .card .say { margin-top: 10px; font-size: 14px; color: var(--muted); }
   footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 </style>
 </head>
@@ -59,12 +67,24 @@
   <h1>Your leftover agent quota, working on open source you choose.</h1>
   <p class="lede">Part of your Claude Code or Codex plan expires unused every week. Swarm spends it on tasks that an open-source project's maintainers wrote, under <strong>your own login</strong>, through the <strong>official CLI</strong>. Your quota is never shared with anyone and no token leaves your machine.</p>
   <ol class="steps" style="margin:22px 0 8px">
-    <li><b>Install the plugin.</b> In Claude Code: <code>/plugin install swarm --marketplace serg1210/swarm</code></li>
-    <li><b>Choose a project.</b> Say "set up Swarm" and pick from the projects that opted in.</li>
-    <li><b>That is it.</b> Leftover quota does one task at a time and opens a pull request only after the project's checks pass. It keeps 20% of your quota for you.</li>
+    <li><b>Install the plugin.</b> Paste this into Claude Code:
+      <div class="copy"><code id="install">/plugin install swarm --marketplace serg1210/swarm</code><button type="button" data-copy="install">Copy</button></div>
+      <span class="hint">Claude desktop app or claude.ai: Customize &rarr; Plugins &rarr; Add marketplace &rarr; <code>serg1210/swarm</code>, then install Swarm.</span></li>
+    <li><b>Choose a project.</b> Say <code>set up Swarm</code>. It asks one question: which project. <a href="#projects">See the projects</a>.</li>
+    <li><b>That is it.</b> Swarm does one task right away, and where the app can schedule, runs once a day after that. It opens a pull request only when the project's checks pass, and keeps 20% of your quota for you.</li>
   </ol>
-  <div class="status">v0.3 · Claude Code, Codex and Hermes tested · runs on your computer or in a Claude Code cloud session · Cowork untested</div>
+  <div class="need"><b>You need:</b> Claude Code on your own plan, a GitHub account, and the <a href="https://cli.github.com">gh</a> CLI logged in (<code>gh auth login</code>). Also Node 20+ and git. Pull requests appear under your GitHub name; without push access Swarm uses a fork it makes for you.</div>
+  <div class="status">v0.3.5 &middot; tested with Claude Code, Codex, Hermes and Claude Code cloud sessions &middot; Cowork: not yet</div>
 
+  <h2 id="projects">Choose a project</h2>
+  <p>These projects opted in. Each has tasks its maintainers wrote and checks that decide when one is done.</p>
+  <div class="grid" id="project-cards">
+    <div class="card"><h3>Swarm core</h3><p>The Swarm CLI and connector themselves: commands, boards, quota detection. JavaScript.</p><p class="say">Say <code>set up Swarm</code> and pick it from the list.</p></div>
+    <div class="card"><h3>Swarm GTM harness</h3><p>Go-to-market copy and the checks that gate it: fact-backed claims, readability, review rubrics. Markdown.</p><p class="say">Say <code>set up Swarm</code> and pick it from the list.</p></div>
+  </div>
+  <p class="hint" style="margin-top:12px">Maintain a project? <a href="https://github.com/serg1210/swarm/blob/main/docs/ADOPTING.md">Add it here</a>.</p>
+
+  <h2>What a run looks like</h2>
 <pre><code><span class="p">$</span> swarm run
 <span class="c">›</span> Checking your quota
   5-hour: 21% used, resets in 4h 30m; weekly: 39% used, resets in 3d 23h
@@ -105,11 +125,12 @@
 
   <h2>Start</h2>
   <p>In Claude Code, install the plugin and say "set up Swarm":</p>
-<pre><code>/plugin install swarm --marketplace serg1210/swarm</code></pre>
+  <div class="copy"><code id="install2">/plugin install swarm --marketplace serg1210/swarm</code><button type="button" data-copy="install2">Copy</button></div>
+  <p>From a terminal, the same install is <code>claude plugin install swarm --marketplace serg1210/swarm</code>.</p>
   <p>Or without the plugin, from a terminal:</p>
 <pre><code><span class="p">$</span> npx github:serg1210/swarm doctor
 <span class="p">$</span> npx github:serg1210/swarm run --dry-run   <span class="p"># pushes nothing; read the result first</span></code></pre>
-  <p>Needs Node 20+, git, the gh CLI, and Claude Code or Codex logged in with your own plan. <a href="https://github.com/serg1210/swarm/blob/main/docs/INSTALL.md">Other ways to install</a> cover cloud sessions, Codex and Hermes. Source, safety model and known limits are in the <a href="https://github.com/serg1210/swarm">repository</a>.</p>
+  <p>Needs Node 20+, git, the gh CLI logged in, and Claude Code or Codex logged in with your own plan. <a href="https://github.com/serg1210/swarm/blob/main/docs/INSTALL.md">Other ways to install</a> cover cloud sessions, Codex and Hermes. Source, safety model and known limits are in the <a href="https://github.com/serg1210/swarm">repository</a>.</p>
 
   <h2>Maintain an open-source project?</h2>
   <p>Add a <code>.swarm</code> directory with tasks and the checks that decide whether one is done. Only tasks you merged are ever worked on, checks run before a pull request exists, and your rules cannot be changed by a contribution. <a href="https://github.com/serg1210/swarm/blob/main/docs/ADOPTING.md">How to adopt Swarm in your repository</a>.</p>
@@ -119,7 +140,26 @@
 <script>
   const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const usd = (n) => '$' + (n || 0).toFixed(2);
+  for (const button of document.querySelectorAll('button[data-copy]')) {
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent);
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Select and copy';
+      }
+      setTimeout(() => (button.textContent = 'Copy'), 2000);
+    });
+  }
   fetch('data.json').then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => {
+    document.getElementById('project-cards').innerHTML = d.projects.map((p) => {
+      const open = p.tasks.filter((t) => t.state === 'open');
+      const done = p.tasks.filter((t) => t.state === 'done').length;
+      return `<div class="card"><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p>
+        <p class="count" style="margin-top:8px">${open.length} open task${open.length === 1 ? '' : 's'}${done ? ` &middot; ${done} done` : ''}</p>
+        ${open.length ? `<ul>${open.slice(0, 3).map((t) => `<li>${esc(t.title)}</li>`).join('')}</ul>` : ''}
+        <p class="say">Say <code>set up Swarm</code> and pick it from the list.</p></div>`;
+    }).join('');
     document.getElementById('tasks').innerHTML = d.projects.map((p) => `
       <h3 style="margin:22px 0 4px;font-size:16px">${esc(p.name)} <span class="ref">${esc(p.id)}</span></h3>
       <p style="color:var(--muted);font-size:15px">${esc(p.description)}</p>
