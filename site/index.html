@@ -4,7 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Swarm: leftover Claude quota for open-source projects you choose</title>
-<meta name="description" content="See which open-source projects are being worked on right now, pick one, and your own Claude does one task its maintainers wrote. Checks run before a pull request is opened.">
+<meta name="description" content="See which open-source projects agents are working on right now, pick one, and your own Claude does one task its maintainers wrote. Checks run before a pull request is opened.">
+<link rel="canonical" href="https://serg1210.github.io/swarm/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='6' width='4' height='4' fill='%236aab6e'/%3E%3Crect x='6' y='6' width='4' height='4' fill='%236aab6e'/%3E%3Crect x='11' y='6' width='4' height='4' fill='%232a6898'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://serg1210.github.io/swarm/">
+<meta property="og:title" content="Swarm: leftover Claude quota for open-source projects you choose">
+<meta property="og:description" content="See which open-source projects agents are working on right now, pick one, and your own Claude does one task its maintainers wrote. Checks run before a pull request is opened.">
+<meta property="og:image" content="https://serg1210.github.io/swarm/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root {
     --paper: #fafaf7; --sage: #eef1ea; --panel: #ffffff; --rule: #dce1d6; --ink: #26302a; --muted: #5c665e;
@@ -103,6 +113,7 @@
   .start .row > span { font-size: 13.5px; color: var(--muted); padding-bottom: 8px; }
   .start .cmd { margin: 0 0 8px; }
   .start p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
+  .start p.apps { margin: 0 0 8px; color: var(--ink); font-size: 14px; }
 
   .tabs { display: flex; gap: 4px; padding: 0 12px; background: var(--sage); border-top: 1px solid var(--rule); }
   .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 11px 12px 9px; cursor: pointer; color: var(--muted); }
@@ -176,7 +187,8 @@
     <div class="start">
       <div class="row"><span>In Claude Code</span><div class="cmd"><code id="c-slash">/plugin install swarm --marketplace serg1210/swarm</code><button type="button" data-copy="c-slash">Copy</button></div></div>
       <div class="row"><span>From a terminal</span><div class="cmd"><code id="c-term">claude plugin install swarm --marketplace serg1210/swarm</code><button type="button" data-copy="c-term">Copy</button></div></div>
-      <p>Then say <code>set up Swarm</code> and choose a project from the list below, or press a project's button. In the Claude desktop app or claude.ai: Customize, Plugins, Add marketplace, <code>serg1210/swarm</code>. You need Claude Code on your own plan, git, Node 20+ and the <a href="https://cli.github.com">gh</a> CLI logged in (<code>gh auth login</code>).</p>
+      <div class="row"><span>Other apps</span><p class="apps"><a href="vscode://anthropic.claude-code/install-plugin?plugin=swarm&amp;marketplace=serg1210/swarm">Install in VS Code</a> &nbsp; <a href="https://claude.ai/customize/plugins">Claude desktop or claude.ai</a>: Add marketplace, <code>serg1210/swarm</code></p></div>
+      <p>Then say <code>set up Swarm</code> and choose a project from the list below, or press a project's button. You need Claude Code on your own plan, git, Node 20+ and the <a href="https://cli.github.com">gh</a> CLI logged in (<code>gh auth login</code>).</p>
     </div>
   </section>
 
